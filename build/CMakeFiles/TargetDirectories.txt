@@ -1,0 +1,5 @@
+/home/chad/git/new_renderer/build/CMakeFiles/edit_cache.dir
+/home/chad/git/new_renderer/build/CMakeFiles/rebuild_cache.dir
+/home/chad/git/new_renderer/build/src/CMakeFiles/path_tracer_renderer.dir
+/home/chad/git/new_renderer/build/src/CMakeFiles/edit_cache.dir
+/home/chad/git/new_renderer/build/src/CMakeFiles/rebuild_cache.dir
