@@ -6,5 +6,5 @@ CXX_DEFINES =
 
 CXX_INCLUDES = -I/home/chad/git/new_renderer/src -I/home/chad/git/new_renderer/src/ui -I/home/chad/git/new_renderer/src/core -I/home/chad/git/new_renderer/src/render -I/home/chad/git/new_renderer/src/main -I/home/chad/git/new_renderer/include
 
-CXX_FLAGS = -g -std=c++17 -Wall -Wextra -Wpedantic -g -O0
+CXX_FLAGS = -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -O3 -DNDEBUG
 

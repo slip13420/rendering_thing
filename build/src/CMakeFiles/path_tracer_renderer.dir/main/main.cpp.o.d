@@ -131,17 +131,17 @@ src/CMakeFiles/path_tracer_renderer.dir/main/main.cpp.o: \
  /usr/include/endian.h /usr/include/bits/byteswap.h \
  /usr/include/bits/uintn-identity.h /usr/include/sys/select.h \
  /usr/include/bits/select.h /usr/include/bits/types/sigset_t.h \
- /usr/include/alloca.h /usr/include/bits/stdlib-float.h \
- /usr/include/c++/15.1.1/bits/std_abs.h /usr/include/c++/15.1.1/cstdio \
- /usr/include/stdio.h /usr/include/bits/types/__fpos_t.h \
- /usr/include/bits/types/__fpos64_t.h \
+ /usr/include/alloca.h /usr/include/bits/stdlib-bsearch.h \
+ /usr/include/bits/stdlib-float.h /usr/include/c++/15.1.1/bits/std_abs.h \
+ /usr/include/c++/15.1.1/cstdio /usr/include/stdio.h \
+ /usr/include/bits/types/__fpos_t.h /usr/include/bits/types/__fpos64_t.h \
  /usr/include/bits/types/struct_FILE.h \
  /usr/include/bits/types/cookie_io_functions_t.h \
- /usr/include/bits/stdio_lim.h /usr/include/c++/15.1.1/cerrno \
- /usr/include/errno.h /usr/include/bits/errno.h \
- /usr/include/linux/errno.h /usr/include/asm/errno.h \
- /usr/include/asm-generic/errno.h /usr/include/asm-generic/errno-base.h \
- /usr/include/bits/types/error_t.h \
+ /usr/include/bits/stdio_lim.h /usr/include/bits/stdio.h \
+ /usr/include/c++/15.1.1/cerrno /usr/include/errno.h \
+ /usr/include/bits/errno.h /usr/include/linux/errno.h \
+ /usr/include/asm/errno.h /usr/include/asm-generic/errno.h \
+ /usr/include/asm-generic/errno-base.h /usr/include/bits/types/error_t.h \
  /usr/include/c++/15.1.1/bits/charconv.h \
  /usr/include/c++/15.1.1/bits/basic_string.tcc \
  /usr/include/c++/15.1.1/stdexcept /usr/include/c++/15.1.1/iostream \
@@ -183,5 +183,19 @@ src/CMakeFiles/path_tracer_renderer.dir/main/main.cpp.o: \
  /usr/include/c++/15.1.1/tr1/poly_hermite.tcc \
  /usr/include/c++/15.1.1/tr1/poly_laguerre.tcc \
  /usr/include/c++/15.1.1/tr1/riemann_zeta.tcc \
+ /usr/include/c++/15.1.1/random /usr/include/c++/15.1.1/cstdint \
+ /usr/lib/gcc/x86_64-pc-linux-gnu/15.1.1/include/stdint.h \
+ /usr/include/stdint.h /usr/include/bits/stdint-uintn.h \
+ /usr/include/bits/stdint-least.h /usr/include/c++/15.1.1/bits/random.h \
+ /usr/include/c++/15.1.1/bits/uniform_int_dist.h \
+ /usr/include/c++/15.1.1/x86_64-pc-linux-gnu/bits/opt_random.h \
+ /usr/include/c++/15.1.1/bits/random.tcc /usr/include/c++/15.1.1/numeric \
+ /usr/include/c++/15.1.1/bits/stl_numeric.h \
+ /usr/include/c++/15.1.1/pstl/glue_numeric_defs.h \
+ /usr/include/c++/15.1.1/algorithm \
+ /usr/include/c++/15.1.1/bits/stl_algo.h \
+ /usr/include/c++/15.1.1/bits/algorithmfwd.h \
+ /usr/include/c++/15.1.1/bits/stl_heap.h \
+ /usr/include/c++/15.1.1/pstl/glue_algorithm_defs.h \
  /home/chad/git/new_renderer/src/ui/ui_manager.h \
  /home/chad/git/new_renderer/src/render/render_engine.h

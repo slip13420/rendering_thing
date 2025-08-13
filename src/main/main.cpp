@@ -29,6 +29,21 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
         auto ui_manager = std::make_unique<UIManager>();
         
         std::cout << "Application initialized successfully!" << std::endl;
+        
+        // Configure rendering settings
+        render_engine->set_render_size(400, 300);
+        render_engine->set_samples_per_pixel(20);
+        render_engine->set_max_depth(12);
+        render_engine->set_camera_position(Vector3(0, 2, 3), Vector3(0, 0, -1), Vector3(0, 1, 0));
+        
+        std::cout << "Starting path traced render..." << std::endl;
+        render_engine->render();
+        
+        // Save the rendered image
+        render_engine->save_image("render_output.ppm");
+        render_engine->display_image();
+        
+        std::cout << "Rendering completed! Image saved to render_output.ppm" << std::endl;
         std::cout << "Press any key to exit..." << std::endl;
         std::cin.get();
         
