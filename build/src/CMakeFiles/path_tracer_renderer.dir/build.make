@@ -208,6 +208,8 @@ src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/core/path_trac
 src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.o
 src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/build.make
 src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/compiler_depend.ts
+src/path_tracer_renderer: /usr/lib/libSDL2.so
+src/path_tracer_renderer: _deps/sdl2-build/libSDL2maind.a
 src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/chad/git/new_renderer/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Linking CXX executable path_tracer_renderer"
 	cd /home/chad/git/new_renderer/build/src && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/path_tracer_renderer.dir/link.txt --verbose=$(VERBOSE)

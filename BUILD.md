@@ -9,41 +9,34 @@ This document provides comprehensive instructions for building the Path Tracer R
 ### All Platforms
 - C++17 compatible compiler (GCC 7+, Clang 5+, MSVC 2017+)
 - CMake 3.16 or newer
-- Git (for cloning the repository)
+- Git (for cloning the repository and automatic dependency download)
+- Internet connection (for initial dependency download)
 
-### Linux Dependencies
+**🎉 No Manual Dependency Installation Required!**
+
+This project uses automatic dependency management. External libraries (SDL2, GLFW) are automatically downloaded and built during the CMake configuration process. You no longer need to manually install SDL2 or GLFW on your system.
+
+📋 **See [DEPENDENCIES.md](DEPENDENCIES.md) for detailed dependency version information and troubleshooting.**
+
+### Optional: System Dependencies (Fallback)
+If you prefer to use system-installed libraries, they will be detected automatically:
+
+**Linux:**
 ```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install build-essential cmake git libsdl2-dev
-
-# Fedora/RHEL/CentOS
-sudo dnf install gcc-c++ cmake git SDL2-devel
-
-# Arch Linux
-sudo pacman -S base-devel cmake git sdl2
-
-# For GLFW (alternative to SDL)
-# Ubuntu/Debian: sudo apt install libglfw3-dev
-# Fedora: sudo dnf install glfw-devel
-# Arch: sudo pacman -S glfw-wayland glfw-x11
+# Optional - system SDL2 (will fallback to automatic download if not found)
+sudo apt install libsdl2-dev    # Ubuntu/Debian
+sudo dnf install SDL2-devel     # Fedora/RHEL
+sudo pacman -S sdl2             # Arch Linux
 ```
 
-### macOS Dependencies
+**macOS:**
 ```bash
-# Using Homebrew
-brew install cmake sdl2
-
-# For GLFW alternative
-brew install glfw
+# Optional - system SDL2 (will fallback to automatic download if not found)
+brew install sdl2
 ```
 
-### Windows Dependencies
-- Visual Studio 2017 or newer (with C++ support)
-- CMake (can be installed via Visual Studio Installer or separately)
-- SDL2 development libraries:
-  - Download from https://www.libsdl.org/download-2.0.php
-  - Extract to `C:\SDL2` or set `SDL2DIR` environment variable
+**Windows:**
+- No manual installation required - dependencies are automatically managed
 
 ## Build Options
 
@@ -159,38 +152,49 @@ cmake --build . --config Release -j 4
 
 ## Troubleshooting
 
-### SDL Not Found
-**Linux:**
-```bash
-sudo apt install libsdl2-dev  # Ubuntu/Debian
-sudo dnf install SDL2-devel   # Fedora/RHEL
+### Automatic Dependency Download Issues
+
+**Problem: Dependencies fail to download**
+```
+CMake Error: Failed to configure dependencies: SDL2::SDL2, SDL2::SDL2main
 ```
 
-**macOS:**
-```bash
-brew install sdl2
-```
+**Solutions:**
+1. **Check internet connection** - Initial download requires internet access
+2. **Clear build cache** - `rm -rf build/` and try again
+3. **Verify CMake version** - Ensure CMake 3.16 or newer is installed
+4. **Check compiler** - Ensure C++17 compatible compiler is available
+5. **Corporate firewalls** - May block Git HTTPS clones, try using system libraries
 
-**Windows:**
-- Download SDL2 development libraries
-- Extract to `C:\SDL2` or set `SDL2DIR` environment variable
-- Ensure both include and lib directories are present
+**Problem: Build fails during dependency compilation**
+This may happen with newer system libraries conflicting with downloaded versions.
 
-### GLFW Not Found
-**Linux:**
-```bash
-sudo apt install libglfw3-dev  # Ubuntu/Debian
-sudo dnf install glfw-devel    # Fedora/RHEL
-```
+**Solutions:**
+1. **Use system libraries** - Install system SDL2/GLFW as fallback
+   ```bash
+   # Linux
+   sudo apt install libsdl2-dev libglfw3-dev  # Ubuntu/Debian
+   sudo dnf install SDL2-devel glfw-devel     # Fedora/RHEL
+   
+   # macOS
+   brew install sdl2 glfw
+   ```
+2. **Clean build** - `rm -rf build/` and reconfigure
+3. **Try different windowing library** - Use `-DUSE_GLFW=ON -DUSE_SDL=OFF`
 
-**macOS:**
-```bash
-brew install glfw
-```
+### Legacy Manual Installation (Not Recommended)
 
-**Windows:**
-- Download GLFW binaries from https://www.glfw.org/download.html
-- Extract and set include/lib paths in CMake or system
+**Only needed if automatic dependency management fails:**
+
+**SDL2 Manual Installation:**
+- Linux: `sudo apt install libsdl2-dev`
+- macOS: `brew install sdl2`  
+- Windows: Download from https://www.libsdl.org/download-2.0.php
+
+**GLFW Manual Installation:**
+- Linux: `sudo apt install libglfw3-dev`
+- macOS: `brew install glfw`
+- Windows: Download from https://www.glfw.org/download.html
 
 ### CMake Version Too Old
 Update CMake to version 3.16 or newer:

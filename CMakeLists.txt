@@ -36,15 +36,17 @@ endif()
 
 find_package(Threads REQUIRED)
 
+# Include automatic dependency management
+include(dependencies)
+
+# Configure windowing libraries after dependencies are resolved
 if(USE_SDL)
-    find_package(SDL2 REQUIRED)
     message(STATUS "Using SDL for windowing")
     set(WINDOWING_LIBS SDL2::SDL2 SDL2::SDL2main)
     add_compile_definitions(USE_SDL)
 endif()
 
 if(USE_GLFW)
-    find_package(glfw3 REQUIRED)
     message(STATUS "Using GLFW for windowing")
     set(WINDOWING_LIBS glfw)
     add_compile_definitions(USE_GLFW)

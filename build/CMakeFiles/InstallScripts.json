@@ -2,6 +2,7 @@
 	"InstallScripts" : 
 	[
 		"/home/chad/git/new_renderer/build/cmake_install.cmake",
+		"/home/chad/git/new_renderer/build/_deps/sdl2-build/cmake_install.cmake",
 		"/home/chad/git/new_renderer/build/src/cmake_install.cmake"
 	],
 	"Parallel" : false

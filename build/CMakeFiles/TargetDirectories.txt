@@ -1,5 +1,11 @@
 /home/chad/git/new_renderer/build/CMakeFiles/edit_cache.dir
 /home/chad/git/new_renderer/build/CMakeFiles/rebuild_cache.dir
+/home/chad/git/new_renderer/build/_deps/sdl2-build/CMakeFiles/sdl_headers_copy.dir
+/home/chad/git/new_renderer/build/_deps/sdl2-build/CMakeFiles/SDL2main.dir
+/home/chad/git/new_renderer/build/_deps/sdl2-build/CMakeFiles/SDL2-static.dir
+/home/chad/git/new_renderer/build/_deps/sdl2-build/CMakeFiles/uninstall.dir
+/home/chad/git/new_renderer/build/_deps/sdl2-build/CMakeFiles/edit_cache.dir
+/home/chad/git/new_renderer/build/_deps/sdl2-build/CMakeFiles/rebuild_cache.dir
 /home/chad/git/new_renderer/build/src/CMakeFiles/path_tracer_renderer.dir
 /home/chad/git/new_renderer/build/src/CMakeFiles/edit_cache.dir
 /home/chad/git/new_renderer/build/src/CMakeFiles/rebuild_cache.dir
