@@ -130,54 +130,6 @@ path_tracer_renderer/fast:
 	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/build
 .PHONY : path_tracer_renderer/fast
 
-core/image_output.o: core/image_output.cpp.o
-.PHONY : core/image_output.o
-
-# target to build an object file
-core/image_output.cpp.o:
-	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.o
-.PHONY : core/image_output.cpp.o
-
-core/image_output.i: core/image_output.cpp.i
-.PHONY : core/image_output.i
-
-# target to preprocess a source file
-core/image_output.cpp.i:
-	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.i
-.PHONY : core/image_output.cpp.i
-
-core/image_output.s: core/image_output.cpp.s
-.PHONY : core/image_output.s
-
-# target to generate assembly for a file
-core/image_output.cpp.s:
-	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.s
-.PHONY : core/image_output.cpp.s
-
-core/path_tracer.o: core/path_tracer.cpp.o
-.PHONY : core/path_tracer.o
-
-# target to build an object file
-core/path_tracer.cpp.o:
-	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.o
-.PHONY : core/path_tracer.cpp.o
-
-core/path_tracer.i: core/path_tracer.cpp.i
-.PHONY : core/path_tracer.i
-
-# target to preprocess a source file
-core/path_tracer.cpp.i:
-	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.i
-.PHONY : core/path_tracer.cpp.i
-
-core/path_tracer.s: core/path_tracer.cpp.s
-.PHONY : core/path_tracer.s
-
-# target to generate assembly for a file
-core/path_tracer.cpp.s:
-	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.s
-.PHONY : core/path_tracer.cpp.s
-
 core/primitives.o: core/primitives.cpp.o
 .PHONY : core/primitives.o
 
@@ -201,30 +153,6 @@ core/primitives.s: core/primitives.cpp.s
 core/primitives.cpp.s:
 	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/core/primitives.cpp.s
 .PHONY : core/primitives.cpp.s
-
-core/render_engine.o: core/render_engine.cpp.o
-.PHONY : core/render_engine.o
-
-# target to build an object file
-core/render_engine.cpp.o:
-	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.o
-.PHONY : core/render_engine.cpp.o
-
-core/render_engine.i: core/render_engine.cpp.i
-.PHONY : core/render_engine.i
-
-# target to preprocess a source file
-core/render_engine.cpp.i:
-	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.i
-.PHONY : core/render_engine.cpp.i
-
-core/render_engine.s: core/render_engine.cpp.s
-.PHONY : core/render_engine.s
-
-# target to generate assembly for a file
-core/render_engine.cpp.s:
-	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.s
-.PHONY : core/render_engine.cpp.s
 
 core/scene_manager.o: core/scene_manager.cpp.o
 .PHONY : core/scene_manager.o
@@ -273,6 +201,78 @@ main/main.s: main/main.cpp.s
 main/main.cpp.s:
 	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/main/main.cpp.s
 .PHONY : main/main.cpp.s
+
+render/image_output.o: render/image_output.cpp.o
+.PHONY : render/image_output.o
+
+# target to build an object file
+render/image_output.cpp.o:
+	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.o
+.PHONY : render/image_output.cpp.o
+
+render/image_output.i: render/image_output.cpp.i
+.PHONY : render/image_output.i
+
+# target to preprocess a source file
+render/image_output.cpp.i:
+	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.i
+.PHONY : render/image_output.cpp.i
+
+render/image_output.s: render/image_output.cpp.s
+.PHONY : render/image_output.s
+
+# target to generate assembly for a file
+render/image_output.cpp.s:
+	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.s
+.PHONY : render/image_output.cpp.s
+
+render/path_tracer.o: render/path_tracer.cpp.o
+.PHONY : render/path_tracer.o
+
+# target to build an object file
+render/path_tracer.cpp.o:
+	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.o
+.PHONY : render/path_tracer.cpp.o
+
+render/path_tracer.i: render/path_tracer.cpp.i
+.PHONY : render/path_tracer.i
+
+# target to preprocess a source file
+render/path_tracer.cpp.i:
+	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.i
+.PHONY : render/path_tracer.cpp.i
+
+render/path_tracer.s: render/path_tracer.cpp.s
+.PHONY : render/path_tracer.s
+
+# target to generate assembly for a file
+render/path_tracer.cpp.s:
+	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.s
+.PHONY : render/path_tracer.cpp.s
+
+render/render_engine.o: render/render_engine.cpp.o
+.PHONY : render/render_engine.o
+
+# target to build an object file
+render/render_engine.cpp.o:
+	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.o
+.PHONY : render/render_engine.cpp.o
+
+render/render_engine.i: render/render_engine.cpp.i
+.PHONY : render/render_engine.i
+
+# target to preprocess a source file
+render/render_engine.cpp.i:
+	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.i
+.PHONY : render/render_engine.cpp.i
+
+render/render_engine.s: render/render_engine.cpp.s
+.PHONY : render/render_engine.s
+
+# target to generate assembly for a file
+render/render_engine.cpp.s:
+	cd /home/chad/git/new_renderer/build && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/path_tracer_renderer.dir/build.make src/CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.s
+.PHONY : render/render_engine.cpp.s
 
 ui/ui_input.o: ui/ui_input.cpp.o
 .PHONY : ui/ui_input.o
@@ -331,24 +331,24 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... path_tracer_renderer"
-	@echo "... core/image_output.o"
-	@echo "... core/image_output.i"
-	@echo "... core/image_output.s"
-	@echo "... core/path_tracer.o"
-	@echo "... core/path_tracer.i"
-	@echo "... core/path_tracer.s"
 	@echo "... core/primitives.o"
 	@echo "... core/primitives.i"
 	@echo "... core/primitives.s"
-	@echo "... core/render_engine.o"
-	@echo "... core/render_engine.i"
-	@echo "... core/render_engine.s"
 	@echo "... core/scene_manager.o"
 	@echo "... core/scene_manager.i"
 	@echo "... core/scene_manager.s"
 	@echo "... main/main.o"
 	@echo "... main/main.i"
 	@echo "... main/main.s"
+	@echo "... render/image_output.o"
+	@echo "... render/image_output.i"
+	@echo "... render/image_output.s"
+	@echo "... render/path_tracer.o"
+	@echo "... render/path_tracer.i"
+	@echo "... render/path_tracer.s"
+	@echo "... render/render_engine.o"
+	@echo "... render/render_engine.i"
+	@echo "... render/render_engine.s"
 	@echo "... ui/ui_input.o"
 	@echo "... ui/ui_input.i"
 	@echo "... ui/ui_input.s"

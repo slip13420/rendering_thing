@@ -142,47 +142,47 @@ src/CMakeFiles/path_tracer_renderer.dir/core/primitives.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/path_tracer_renderer.dir/core/primitives.cpp.s"
 	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chad/git/new_renderer/src/core/primitives.cpp -o CMakeFiles/path_tracer_renderer.dir/core/primitives.cpp.s
 
-src/CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.o: src/CMakeFiles/path_tracer_renderer.dir/flags.make
-src/CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.o: /home/chad/git/new_renderer/src/core/render_engine.cpp
-src/CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.o: src/CMakeFiles/path_tracer_renderer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/chad/git/new_renderer/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object src/CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.o"
-	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.o -MF CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.o.d -o CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.o -c /home/chad/git/new_renderer/src/core/render_engine.cpp
+src/CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.o: src/CMakeFiles/path_tracer_renderer.dir/flags.make
+src/CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.o: /home/chad/git/new_renderer/src/render/render_engine.cpp
+src/CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.o: src/CMakeFiles/path_tracer_renderer.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/chad/git/new_renderer/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object src/CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.o"
+	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.o -MF CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.o.d -o CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.o -c /home/chad/git/new_renderer/src/render/render_engine.cpp
 
-src/CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.i"
-	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chad/git/new_renderer/src/core/render_engine.cpp > CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.i
+src/CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.i"
+	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chad/git/new_renderer/src/render/render_engine.cpp > CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.i
 
-src/CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.s"
-	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chad/git/new_renderer/src/core/render_engine.cpp -o CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.s
+src/CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.s"
+	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chad/git/new_renderer/src/render/render_engine.cpp -o CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.s
 
-src/CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.o: src/CMakeFiles/path_tracer_renderer.dir/flags.make
-src/CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.o: /home/chad/git/new_renderer/src/core/path_tracer.cpp
-src/CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.o: src/CMakeFiles/path_tracer_renderer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/chad/git/new_renderer/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object src/CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.o"
-	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.o -MF CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.o.d -o CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.o -c /home/chad/git/new_renderer/src/core/path_tracer.cpp
+src/CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.o: src/CMakeFiles/path_tracer_renderer.dir/flags.make
+src/CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.o: /home/chad/git/new_renderer/src/render/path_tracer.cpp
+src/CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.o: src/CMakeFiles/path_tracer_renderer.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/chad/git/new_renderer/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object src/CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.o"
+	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.o -MF CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.o.d -o CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.o -c /home/chad/git/new_renderer/src/render/path_tracer.cpp
 
-src/CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.i"
-	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chad/git/new_renderer/src/core/path_tracer.cpp > CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.i
+src/CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.i"
+	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chad/git/new_renderer/src/render/path_tracer.cpp > CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.i
 
-src/CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.s"
-	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chad/git/new_renderer/src/core/path_tracer.cpp -o CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.s
+src/CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.s"
+	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chad/git/new_renderer/src/render/path_tracer.cpp -o CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.s
 
-src/CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.o: src/CMakeFiles/path_tracer_renderer.dir/flags.make
-src/CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.o: /home/chad/git/new_renderer/src/core/image_output.cpp
-src/CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.o: src/CMakeFiles/path_tracer_renderer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/chad/git/new_renderer/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object src/CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.o"
-	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.o -MF CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.o.d -o CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.o -c /home/chad/git/new_renderer/src/core/image_output.cpp
+src/CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.o: src/CMakeFiles/path_tracer_renderer.dir/flags.make
+src/CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.o: /home/chad/git/new_renderer/src/render/image_output.cpp
+src/CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.o: src/CMakeFiles/path_tracer_renderer.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/chad/git/new_renderer/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object src/CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.o"
+	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.o -MF CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.o.d -o CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.o -c /home/chad/git/new_renderer/src/render/image_output.cpp
 
-src/CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.i"
-	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chad/git/new_renderer/src/core/image_output.cpp > CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.i
+src/CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.i"
+	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/chad/git/new_renderer/src/render/image_output.cpp > CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.i
 
-src/CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.s"
-	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chad/git/new_renderer/src/core/image_output.cpp -o CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.s
+src/CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.s"
+	cd /home/chad/git/new_renderer/build/src && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/chad/git/new_renderer/src/render/image_output.cpp -o CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.s
 
 # Object files for target path_tracer_renderer
 path_tracer_renderer_OBJECTS = \
@@ -191,9 +191,9 @@ path_tracer_renderer_OBJECTS = \
 "CMakeFiles/path_tracer_renderer.dir/ui/ui_input.cpp.o" \
 "CMakeFiles/path_tracer_renderer.dir/core/scene_manager.cpp.o" \
 "CMakeFiles/path_tracer_renderer.dir/core/primitives.cpp.o" \
-"CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.o" \
-"CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.o" \
-"CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.o"
+"CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.o" \
+"CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.o" \
+"CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.o"
 
 # External object files for target path_tracer_renderer
 path_tracer_renderer_EXTERNAL_OBJECTS =
@@ -203,13 +203,11 @@ src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/ui/ui_manager.
 src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/ui/ui_input.cpp.o
 src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/core/scene_manager.cpp.o
 src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/core/primitives.cpp.o
-src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/core/render_engine.cpp.o
-src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/core/path_tracer.cpp.o
-src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/core/image_output.cpp.o
+src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/render/render_engine.cpp.o
+src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/render/path_tracer.cpp.o
+src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/render/image_output.cpp.o
 src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/build.make
 src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/compiler_depend.ts
-src/path_tracer_renderer: /usr/lib/libSDL2.so
-src/path_tracer_renderer: _deps/sdl2-build/libSDL2maind.a
 src/path_tracer_renderer: src/CMakeFiles/path_tracer_renderer.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/chad/git/new_renderer/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Linking CXX executable path_tracer_renderer"
 	cd /home/chad/git/new_renderer/build/src && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/path_tracer_renderer.dir/link.txt --verbose=$(VERBOSE)

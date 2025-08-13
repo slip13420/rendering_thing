@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/home/chad/git/new_renderer/build/_deps/sdl2-subbuild/cmake_install.cmake"
-	],
-	"Parallel" : false
-}

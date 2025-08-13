@@ -1,6 +1,6 @@
-#include "common.h"
-#include "ui_manager.h"
-#include "render_engine.h"
+#include "core/common.h"
+#include "ui/ui_manager.h"
+#include "render/render_engine.h"
 #include <iostream>
 #include <memory>
 

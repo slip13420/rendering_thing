@@ -4,9 +4,9 @@ set(SOURCES
     ui/ui_input.cpp
     core/scene_manager.cpp
     core/primitives.cpp
-    core/render_engine.cpp
-    core/path_tracer.cpp
-    core/image_output.cpp
+    render/render_engine.cpp
+    render/path_tracer.cpp
+    render/image_output.cpp
 )
 
 set(HEADERS
@@ -14,9 +14,9 @@ set(HEADERS
     ui/ui_input.h
     core/scene_manager.h
     core/primitives.h
-    core/render_engine.h
-    core/path_tracer.h
-    core/image_output.h
+    render/render_engine.h
+    render/path_tracer.h
+    render/image_output.h
     core/common.h
 )
 
@@ -43,7 +43,9 @@ target_include_directories(path_tracer_renderer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/ui
     ${CMAKE_CURRENT_SOURCE_DIR}/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/render
     ${CMAKE_CURRENT_SOURCE_DIR}/main
+    ${CMAKE_SOURCE_DIR}/include
 )
 
 target_link_libraries(path_tracer_renderer PRIVATE
