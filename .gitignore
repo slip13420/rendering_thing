@@ -1,0 +1,235 @@
+# .gitignore for Path Tracer Renderer Project
+# ===========================================
+
+# Build directories and output files
+build/
+dist/
+out/
+bin/
+lib/
+obj/
+target/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# Visual Studio / Visual Studio Code
+.vs/
+.vscode/
+*.vcxproj*
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build artifacts and executables
+*.exe
+*.out
+*.app
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.o
+*.obj
+*.pdb
+*.ilk
+*.map
+*.exp
+
+# Compiler and linker files
+*.d
+*.gch
+*.pch
+
+# Debug and profiling files
+*.dSYM/
+*.su
+*.idb
+*.ipdb
+
+# Package managers
+conan.lock
+vcpkg_installed/
+dependencies/
+
+# IDE files
+*.cbp
+*.layout
+*.depend
+*.workspace
+.clangd/
+.cache/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.#*
+
+# Log files
+*.log
+*.logs
+logs/
+
+# Runtime and test files
+core
+vgcore.*
+*.stackdump
+
+# Rendered output files (unless specifically needed)
+*.ppm
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.tga
+*.hdr
+*.exr
+render_output.*
+output/
+
+# Documentation build
+docs/_build/
+docs/html/
+docs/latex/
+*.pdf
+
+# Coverage reports
+coverage/
+*.gcov
+*.gcda
+*.gcno
+lcov.info
+
+# Profiling data
+*.prof
+gmon.out
+callgrind.out.*
+perf.data*
+
+# Benchmarking results
+benchmark_results/
+*.bench
+
+# Static analysis
+cppcheck-report.*
+*.cppcheck
+
+# Memory debugging
+valgrind-*.xml
+*.memcheck
+
+# Project specific
+scenes/
+assets/large/
+test_renders/
+performance_logs/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Editor backup files
+*~
+*.bak
+*.backup
+.*.swp
+.*.swo
+
+# Archive files
+*.tar
+*.zip
+*.7z
+*.rar
+
+# Language Server Protocol
+.clangd/
+compile_flags.txt
+
+# Custom build scripts output
+build_*.log
+install_*.log
+
+# Third-party downloads (if not using package manager)
+third_party/downloads/
+external/downloads/
+
+# Test artifacts
+test_results/
+*.xml
+*.junit
+
+# Platform specific ignores
+# Windows
+*.lnk
+
+# macOS
+.AppleDouble
+.LSOverride
+Icon
+
+# Linux
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Node.js (if using any JS tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python (if using any Python scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+.venv
+
+# Rust (if using any Rust components)
+target/
+Cargo.lock
+
+# Local configuration
+local_config.json
+local_settings.*
+config.local.*
+
+# SSH keys and certificates
+*.pem
+*.key
+*.crt
+*.cert
+
+# Secrets and credentials
+*.secret
+*.credentials
+api_keys.*
