@@ -7,7 +7,7 @@
 
 RenderEngine::RenderEngine() 
     : initialized_(false), render_width_(800), render_height_(600),
-      render_state_(RenderState::IDLE), stop_requested_(false) {
+      render_state_(RenderState::IDLE), stop_requested_(false), progressive_mode_(false), manual_progressive_mode_(false) {
     initialize();
 }
 
@@ -154,9 +154,48 @@ void RenderEngine::display_image() {
 }
 
 void RenderEngine::update_camera_preview(const Vector3& camera_pos, const Vector3& camera_target) {
-    if (image_output_) {
-        image_output_->update_camera_preview(camera_pos, camera_target);
+    if (!initialized_) return;
+    
+    // Throttle camera preview updates to avoid excessive rendering during rapid movement
+    static auto last_preview_time = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_preview_time);
+    
+    // Only update preview every 100ms to maintain responsiveness without overwhelming
+    if (elapsed.count() < 100 && is_progressive_rendering()) {
+        return;
     }
+    
+    last_preview_time = now;
+    
+    // Don't interrupt manual progressive renders with camera preview
+    if (manual_progressive_mode_) {
+        std::cout << "Skipping camera preview - manual progressive render in progress" << std::endl;
+        return;
+    }
+    
+    // Stop any existing progressive render for camera preview (only camera preview renders)
+    if (is_progressive_rendering() && !manual_progressive_mode_) {
+        stop_progressive_render();
+        
+        // Brief wait for cleanup
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    
+    // Update camera position in the scene
+    set_camera_position(camera_pos, camera_target);
+    
+    // Start a fast progressive render for real-time preview
+    ProgressiveConfig preview_config;
+    preview_config.initialSamples = 1;      // Start with 1 sample for immediate feedback
+    preview_config.targetSamples = 16;      // Low target for responsive preview
+    preview_config.progressiveSteps = 4;    // Few steps for speed
+    preview_config.updateInterval = 0.08f;  // Very fast updates for real-time feel
+    
+    std::cout << "Starting camera preview progressive render..." << std::endl;
+    start_progressive_render(preview_config);
+    // Camera preview renders should not be treated as manual renders
+    manual_progressive_mode_ = false;
 }
 
 void RenderEngine::start_render() {
@@ -203,6 +242,40 @@ void RenderEngine::stop_render() {
     }
     
     set_render_state(RenderState::STOPPED);
+}
+
+void RenderEngine::start_progressive_render(const ProgressiveConfig& config) {
+    if (render_state_ == RenderState::RENDERING) {
+        std::cerr << "Cannot start progressive render: already in progress" << std::endl;
+        return;
+    }
+    
+    if (!initialized_) {
+        std::cerr << "RenderEngine not initialized!" << std::endl;
+        set_render_state(RenderState::ERROR);
+        return;
+    }
+    
+    stop_requested_ = false;
+    progressive_mode_ = true;
+    manual_progressive_mode_ = true;  // This is a manual progressive render
+    set_render_state(RenderState::RENDERING);
+    
+    if (render_thread_.joinable()) {
+        render_thread_.join();
+    }
+    
+    render_thread_ = std::thread(&RenderEngine::progressive_render_worker, this, config);
+    std::cout << "Progressive render started" << std::endl;
+}
+
+void RenderEngine::stop_progressive_render() {
+    progressive_mode_ = false;
+    stop_render(); // Reuse existing stop logic
+}
+
+bool RenderEngine::is_progressive_rendering() const {
+    return progressive_mode_ && render_state_ == RenderState::RENDERING;
 }
 
 bool RenderEngine::is_rendering() const {
@@ -253,6 +326,63 @@ void RenderEngine::render_worker() {
     } catch (const std::exception& e) {
         std::cerr << "Render orchestration error: " << e.what() << std::endl;
         cleanup_partial_render();
+        set_render_state(RenderState::ERROR);
+    }
+}
+
+void RenderEngine::progressive_render_worker(const ProgressiveConfig& config) {
+    try {
+        std::cout << "Starting progressive render orchestration (" << render_width_ << "x" << render_height_ << ")" << std::endl;
+        
+        // Render pipeline initialization
+        if (!validate_render_components()) {
+            set_render_state(RenderState::ERROR);
+            return;
+        }
+        
+        // Coordinate scene data and camera setup
+        synchronize_render_components();
+        
+        // Set up PathTracer cancellation
+        path_tracer_->reset_stop_request();
+        
+        // Create progressive callback to update display in real-time
+        auto progressive_callback = [this](const std::vector<Color>& data, int width, int height, int current_samples, int target_samples) {
+            if (image_output_) {
+                image_output_->update_progressive_display(data, width, height, current_samples, target_samples);
+            }
+            // Also update UI progress
+            if (progress_callback_) {
+                progress_callback_(width, height, current_samples, target_samples);
+            }
+        };
+        
+        // Execute progressive path tracing
+        std::cout << "Executing progressive PathTracer with current scene configuration..." << std::endl;
+        bool completed = path_tracer_->trace_progressive(render_width_, render_height_, config, progressive_callback);
+        
+        // Check if we were stopped during rendering
+        if (stop_requested_ || !completed) {
+            cleanup_partial_render();
+            progressive_mode_ = false;
+            manual_progressive_mode_ = false;
+            set_render_state(RenderState::STOPPED);
+            return;
+        }
+        
+        // Process render completion and result handling
+        process_render_completion();
+        
+        progressive_mode_ = false;
+        manual_progressive_mode_ = false;
+        set_render_state(RenderState::COMPLETED);
+        std::cout << "Progressive render orchestration completed successfully" << std::endl;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Progressive render orchestration error: " << e.what() << std::endl;
+        cleanup_partial_render();
+        progressive_mode_ = false;
+        manual_progressive_mode_ = false;
         set_render_state(RenderState::ERROR);
     }
 }

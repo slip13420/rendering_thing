@@ -11,6 +11,7 @@ class PathTracer;
 class SceneManager;
 class ImageOutput;
 class Camera;
+struct ProgressiveConfig;
 
 enum class RenderState {
     IDLE,           // No render in progress
@@ -34,6 +35,12 @@ public:
     void stop_render();
     bool is_rendering() const;
     RenderState get_render_state() const;
+    
+    // Progressive rendering
+    void start_progressive_render(const ProgressiveConfig& config);
+    void stop_progressive_render();
+    bool is_progressive_rendering() const;
+    void set_progress_callback(std::function<void(int, int, int, int)> callback) { progress_callback_ = callback; }
     
     // State change notifications
     void set_state_change_callback(std::function<void(RenderState)> callback);
@@ -60,6 +67,7 @@ public:
 private:
     // Threading and state management
     void render_worker();
+    void progressive_render_worker(const ProgressiveConfig& config);
     void set_render_state(RenderState state);
     
     // Render orchestration
@@ -79,6 +87,9 @@ private:
     // Render state and threading
     std::atomic<RenderState> render_state_;
     std::atomic<bool> stop_requested_;
+    std::atomic<bool> progressive_mode_;
+    std::atomic<bool> manual_progressive_mode_;  // Track if this is a manual progressive render
     std::thread render_thread_;
     std::function<void(RenderState)> state_change_callback_;
+    std::function<void(int, int, int, int)> progress_callback_;
 };

@@ -6,9 +6,21 @@
 #include <vector>
 #include <memory>
 #include <atomic>
+#include <functional>
 
-// Forward declaration to avoid circular dependency
+// Forward declarations
 class SceneManager;
+
+// Progressive rendering configuration
+struct ProgressiveConfig {
+    int initialSamples = 1;      // Quick preview sample count
+    int targetSamples = 1000;    // Final quality sample count
+    int progressiveSteps = 10;   // Number of progressive improvement passes
+    float updateInterval = 0.5f; // Seconds between progressive updates
+};
+
+// Progressive rendering callback for intermediate results
+using ProgressiveCallback = std::function<void(const std::vector<Color>&, int, int, int, int)>;
 
 class PathTracer {
 public:
@@ -17,6 +29,10 @@ public:
     
     void trace(int width, int height);
     bool trace_interruptible(int width, int height);
+    
+    // Progressive rendering
+    bool trace_progressive(int width, int height, const ProgressiveConfig& config, ProgressiveCallback callback);
+    
     void set_scene_manager(std::shared_ptr<SceneManager> scene_manager);
     void set_camera(const Camera& camera);
     void set_max_depth(int depth) { max_depth_ = depth; }
@@ -47,7 +63,7 @@ private:
     std::vector<Color> image_data_;
     int max_depth_;
     int samples_per_pixel_;
+    std::atomic<bool> stop_requested_;
     mutable std::mt19937 rng_;
     mutable std::uniform_real_distribution<float> uniform_dist_;
-    std::atomic<bool> stop_requested_;
 };

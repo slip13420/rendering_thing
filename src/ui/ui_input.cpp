@@ -1,6 +1,7 @@
 #include "ui_input.h"
 #include "core/scene_manager.h"
 #include "render/render_engine.h"
+#include "render/path_tracer.h"
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -265,8 +266,22 @@ void UIInput::handle_realtime_camera_input(int keycode) {
         case SDLK_g:
             std::cout << "G key pressed!" << std::endl;
             if (render_engine_) {
-                std::cout << "Starting render..." << std::endl;
+                std::cout << "Starting standard render..." << std::endl;
                 render_engine_->start_render();
+            } else {
+                std::cout << "No render engine available!" << std::endl;
+            }
+            break;
+        case SDLK_m:
+            std::cout << "M key pressed - Starting Progressive Render!" << std::endl;
+            if (render_engine_) {
+                ProgressiveConfig config;
+                config.initialSamples = 1;
+                config.targetSamples = 100;
+                config.progressiveSteps = 8;
+                config.updateInterval = 0.3f;
+                std::cout << "Starting progressive render (1->100 samples, 8 steps)..." << std::endl;
+                render_engine_->start_progressive_render(config);
             } else {
                 std::cout << "No render engine available!" << std::endl;
             }
@@ -363,7 +378,8 @@ void UIInput::print_camera_controls() const {
     std::cout << "H   - Show this help" << std::endl;
     std::cout << "Q/ESC - Quit application" << std::endl;
     std::cout << "\n=== RENDER CONTROLS ===" << std::endl;
-    std::cout << "G   - Start rendering" << std::endl;
+    std::cout << "G   - Start standard rendering" << std::endl;
+    std::cout << "M   - Start progressive rendering (1->100 samples)" << std::endl;
     std::cout << "T   - Stop/cancel rendering" << std::endl;
     std::cout << "\nCamera moves independently - use G to render from current position!" << std::endl;
     std::cout << "==================================" << std::endl;

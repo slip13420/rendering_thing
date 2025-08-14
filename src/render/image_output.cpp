@@ -1,12 +1,13 @@
 #include "image_output.h"
 #include <fstream>
 #include <iostream>
+#include <chrono>
 
 #ifdef USE_SDL
 #include <SDL.h>
 #endif
 
-ImageOutput::ImageOutput() : width_(0), height_(0), window_open_(false) {
+ImageOutput::ImageOutput() : width_(0), height_(0), window_open_(false), progress_callback_(nullptr) {
 #ifdef USE_SDL
     window_ = nullptr;
     renderer_ = nullptr;
@@ -114,78 +115,57 @@ void ImageOutput::initialize_display(int width, int height) {
     std::cout << "Display initialized: " << width << "x" << height << std::endl;
 }
 
-void ImageOutput::update_camera_preview(const Vector3& camera_pos, const Vector3& camera_target) {
-    if (image_data_.empty()) return;
+void ImageOutput::update_camera_preview(const Vector3& /* camera_pos */, const Vector3& /* camera_target */) {
+    // This method is now deprecated - camera preview is handled by progressive rendering
+    // Keeping the method for compatibility but it does nothing
+    // Real-time updates are now handled through progressive rendering system
+}
+
+void ImageOutput::update_progressive_display(const std::vector<Color>& data, int width, int height, int current_samples, int target_samples) {
+    // Update image data with progressive result
+    set_image_data(data, width, height);
     
-    // Simple rasterized preview - render basic scene geometry
-    Vector3 camera_dir = (camera_target - camera_pos).normalized();
-    Vector3 camera_right = camera_dir.cross(Vector3(0, 1, 0)).normalized();
-    Vector3 camera_up = camera_right.cross(camera_dir).normalized();
+    // Throttled display updates to avoid excessive UI overhead
+    static auto last_display_update = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_display_update).count();
     
-    // Clear with sky color
-    Color sky_color(0.3f, 0.5f, 0.8f, 1.0f);
-    Color ground_color(0.2f, 0.3f, 0.1f, 1.0f);
+    // Limit display updates to maximum 10 FPS (100ms) for performance
+    const int MIN_UPDATE_INTERVAL_MS = 100;
+    bool should_update_display = (elapsed_ms >= MIN_UPDATE_INTERVAL_MS);
     
-    for (int y = 0; y < height_; y++) {
-        for (int x = 0; x < width_; x++) {
-            // Convert screen coordinates to camera ray direction
-            float u = (2.0f * x / width_) - 1.0f;
-            float v = 1.0f - (2.0f * y / height_);
-            
-            Vector3 ray_dir = (camera_dir + camera_right * u + camera_up * v).normalized();
-            
-            Color pixel_color = sky_color;
-            
-            // Simple ground plane at y = 0
-            if (ray_dir.y < 0 && camera_pos.y > 0) {
-                float t = -camera_pos.y / ray_dir.y;
-                if (t > 0) {
-                    Vector3 hit_point = camera_pos + ray_dir * t;
-                    
-                    // Checkerboard pattern on ground
-                    int checker_x = static_cast<int>(hit_point.x + 1000) / 2;
-                    int checker_z = static_cast<int>(hit_point.z + 1000) / 2;
-                    bool checker = (checker_x + checker_z) % 2 == 0;
-                    
-                    pixel_color = checker ? Color(0.3f, 0.4f, 0.2f) : Color(0.1f, 0.2f, 0.05f);
-                }
+    // Always update on final sample or significant progress milestones
+    float progress_percent = float(current_samples) / target_samples;
+    static float last_reported_progress = 0.0f;
+    bool significant_progress = (progress_percent - last_reported_progress) >= 0.05f; // 5% increments
+    
+    if (should_update_display || current_samples == target_samples || significant_progress) {
+        // Update display in real-time
+#ifdef USE_SDL
+        if (window_open_) {
+            update_window();
+            if (current_samples == target_samples || significant_progress) {
+                std::cout << "Progressive update: " << current_samples << "/" << target_samples 
+                          << " samples (" << int(100 * progress_percent) << "%)" << std::endl;
             }
-            
-            // Simple sphere at origin with radius 1
-            Vector3 sphere_center(0, 1, 0);
-            float sphere_radius = 1.0f;
-            Vector3 to_sphere = camera_pos - sphere_center;
-            
-            float a = ray_dir.dot(ray_dir);
-            float b = 2.0f * ray_dir.dot(to_sphere);
-            float c = to_sphere.dot(to_sphere) - sphere_radius * sphere_radius;
-            
-            float discriminant = b * b - 4 * a * c;
-            if (discriminant >= 0) {
-                float t = (-b - std::sqrt(discriminant)) / (2 * a);
-                if (t > 0.1f) { // Avoid rendering behind camera
-                    Vector3 hit_point = camera_pos + ray_dir * t;
-                    Vector3 normal = (hit_point - sphere_center).normalized();
-                    
-                    // Simple lighting
-                    Vector3 light_dir(-0.3f, -1.0f, -0.3f);
-                    light_dir = light_dir.normalized();
-                    float light_intensity = std::max(0.0f, -normal.dot(light_dir));
-                    
-                    pixel_color = Color(0.8f, 0.3f, 0.3f) * (0.3f + 0.7f * light_intensity);
-                }
-            }
-            
-            image_data_[y * width_ + x] = pixel_color.clamped();
+        }
+#else
+        if (current_samples == target_samples || significant_progress) {
+            std::cout << "Progressive render update: " << current_samples << "/" << target_samples 
+                      << " samples (" << int(100 * progress_percent) << "%)" << std::endl;
+        }
+#endif
+        
+        last_display_update = now;
+        if (significant_progress) {
+            last_reported_progress = progress_percent;
         }
     }
     
-    // Update display
-#ifdef USE_SDL
-    if (window_open_) {
-        update_window();
+    // Always call progress callback for UI updates (they handle their own throttling)
+    if (progress_callback_) {
+        progress_callback_(width, height, current_samples, target_samples);
     }
-#endif
 }
 
 bool ImageOutput::create_window(const std::string& title, int width, int height) {

@@ -41,6 +41,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
         ui_manager->set_render_engine(render_engine);
         ui_manager->initialize();
         
+        // Connect progress callback from render engine to UI manager
+        render_engine->set_progress_callback([&ui_manager](int w, int h, int current, int target) {
+            ui_manager->update_progress(w, h, current, target);
+        });
+        
         std::cout << "Application initialized successfully!" << std::endl;
         
         // Configure rendering settings for real-time interaction
@@ -63,6 +68,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
         // Real-time SDL event loop
         while (!ui_manager->should_quit()) {
             ui_manager->process_input();
+            ui_manager->update();
+            ui_manager->render(); // Show progress feedback
             
             // Small delay to prevent 100% CPU usage
             std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60 FPS

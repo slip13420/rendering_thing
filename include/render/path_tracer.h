@@ -3,10 +3,23 @@
 #include "core/common.h"
 #include <random>
 #include <memory>
+#include <functional>
+#include <atomic>
 
 // Forward declarations
 class SceneManager;
 class Camera;
+
+// Progressive rendering configuration
+struct ProgressiveConfig {
+    int initialSamples = 1;      // Quick preview sample count
+    int targetSamples = 1000;    // Final quality sample count
+    int progressiveSteps = 10;   // Number of progressive improvement passes
+    float updateInterval = 0.5f; // Seconds between progressive updates
+};
+
+// Progressive rendering callback for intermediate results
+using ProgressiveCallback = std::function<void(const std::vector<Color>&, int, int, int, int)>;
 
 class PathTracer {
 public:
@@ -14,6 +27,13 @@ public:
     ~PathTracer();
     
     void trace(int width, int height);
+    bool trace_interruptible(int width, int height);
+    
+    // Progressive rendering
+    bool trace_progressive(int width, int height, const ProgressiveConfig& config, ProgressiveCallback callback);
+    void request_stop() { stop_requested_ = true; }
+    void reset_stop_request() { stop_requested_ = false; }
+    bool is_stop_requested() const { return stop_requested_; }
     
     // Configuration
     void set_scene_manager(std::shared_ptr<SceneManager> scene_manager);
@@ -38,6 +58,8 @@ private:
     
     int max_depth_;
     int samples_per_pixel_;
+    
+    std::atomic<bool> stop_requested_;
     
     mutable std::mt19937 rng_;
     mutable std::uniform_real_distribution<float> uniform_dist_;

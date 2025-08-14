@@ -3,8 +3,10 @@
 #include "core/scene_manager.h"
 #include "render/render_engine.h"
 #include <iostream>
+#include <iomanip>
+#include <sstream>
 
-UIManager::UIManager() : initialized_(false), current_render_state_(RenderState::IDLE) {
+UIManager::UIManager() : initialized_(false), current_render_state_(RenderState::IDLE), show_progress_details_(false) {
     
 }
 
@@ -40,6 +42,8 @@ void UIManager::render() {
     render_status_display();
     render_start_button();
     render_stop_button();
+    render_progressive_controls();
+    render_progress_display();
 }
 
 void UIManager::shutdown() {
@@ -131,4 +135,118 @@ std::string UIManager::get_render_state_text(RenderState state) const {
 void UIManager::on_render_state_changed(RenderState state) {
     current_render_state_ = state;
     std::cout << "Render state changed to: " << get_render_state_text(state) << std::endl;
+    
+    // Reset progress when starting new render
+    if (state == RenderState::RENDERING) {
+        reset_progress();
+    }
+}
+
+void UIManager::update_progress(int width, int height, int current_samples, int target_samples) {
+    auto now = std::chrono::steady_clock::now();
+    
+    // Initialize timing on first update
+    if (progress_data_.current_samples == 0) {
+        progress_data_.start_time = now;
+        progress_data_.last_update_time = now;
+    }
+    
+    progress_data_.width = width;
+    progress_data_.height = height;
+    progress_data_.current_samples = current_samples;
+    progress_data_.target_samples = target_samples;
+    
+    // Calculate progress percentage
+    if (target_samples > 0) {
+        progress_data_.progress_percentage = (100.0f * current_samples) / target_samples;
+    }
+    
+    // Calculate samples per second
+    auto elapsed = std::chrono::duration<float>(now - progress_data_.start_time).count();
+    if (elapsed > 0.1f) { // Avoid division by very small numbers
+        progress_data_.samples_per_second = current_samples / elapsed;
+    }
+    
+    // Calculate estimated time remaining
+    if (progress_data_.samples_per_second > 0) {
+        int remaining_samples = target_samples - current_samples;
+        progress_data_.estimated_time_remaining = remaining_samples / progress_data_.samples_per_second;
+    }
+    
+    progress_data_.last_update_time = now;
+    show_progress_details_ = true;
+}
+
+void UIManager::reset_progress() {
+    progress_data_ = ProgressData{};
+    show_progress_details_ = false;
+}
+
+void UIManager::render_progress_display() {
+    if (!show_progress_details_ || current_render_state_ != RenderState::RENDERING) {
+        return;
+    }
+    
+    std::cout << "\n=== Progressive Rendering Status ===" << std::endl;
+    std::cout << std::fixed << std::setprecision(1);
+    
+    // Progress bar
+    int bar_width = 40;
+    int filled = int(progress_data_.progress_percentage * bar_width / 100.0f);
+    std::cout << "[";
+    for (int i = 0; i < bar_width; ++i) {
+        std::cout << (i < filled ? "█" : "░");
+    }
+    std::cout << "] " << progress_data_.progress_percentage << "%" << std::endl;
+    
+    // Sample counts
+    std::cout << "Samples: " << progress_data_.current_samples 
+              << " / " << progress_data_.target_samples << std::endl;
+    
+    // Resolution
+    std::cout << "Resolution: " << progress_data_.width 
+              << "x" << progress_data_.height << std::endl;
+    
+    // Performance metrics
+    std::cout << "Speed: " << progress_data_.samples_per_second 
+              << " samples/sec" << std::endl;
+    
+    // Time estimation
+    std::cout << "ETA: " << format_time(progress_data_.estimated_time_remaining) << std::endl;
+    
+    std::cout << "====================================" << std::endl;
+}
+
+void UIManager::render_progressive_controls() {
+    if (!render_engine_) return;
+    
+    bool is_progressive = render_engine_->is_progressive_rendering();
+    
+    std::cout << "[Progressive Rendering: " << (is_progressive ? "ACTIVE" : "INACTIVE") << "]" << std::endl;
+    
+    if (current_render_state_ == RenderState::IDLE || 
+        current_render_state_ == RenderState::COMPLETED ||
+        current_render_state_ == RenderState::STOPPED) {
+        std::cout << "  Available: Start Progressive Render" << std::endl;
+    }
+}
+
+std::string UIManager::format_time(float seconds) const {
+    if (seconds < 60) {
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(1) << seconds << "s";
+        return oss.str();
+    } else if (seconds < 3600) {
+        int minutes = int(seconds / 60);
+        int secs = int(seconds) % 60;
+        std::ostringstream oss;
+        oss << minutes << "m " << secs << "s";
+        return oss.str();
+    } else {
+        int hours = int(seconds / 3600);
+        int minutes = int(seconds / 60) % 60;
+        std::ostringstream oss;
+        oss << hours << "h " << minutes << "m";
+        return oss.str();
+    }
 }
