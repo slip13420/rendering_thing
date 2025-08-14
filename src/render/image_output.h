@@ -19,6 +19,8 @@ public:
     void save_to_file(const std::string& filename);
     void display_to_screen();
     void clear();
+    void initialize_display(int width, int height);
+    void update_camera_preview(const Vector3& camera_pos, const Vector3& camera_target);
     
     // SDL window management
     bool create_window(const std::string& title, int width, int height);

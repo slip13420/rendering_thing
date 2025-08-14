@@ -11,9 +11,9 @@
 #endif
 
 UIInput::UIInput() : quit_requested_(false), camera_move_speed_(0.5f), 
-                     mouse_sensitivity_(0.0005f), mouse_captured_(false), 
+                     mouse_sensitivity_(0.002f), mouse_captured_(false), 
                      last_mouse_x_(0), last_mouse_y_(0), 
-                     camera_yaw_(0.0f), camera_pitch_(0.0f) {
+                     camera_yaw_(-1.57f), camera_pitch_(0.0f) {  // Start looking forward (-Z)
     print_camera_controls();
 }
 
@@ -32,8 +32,22 @@ void UIInput::processEvents() {
             quit_requested_ = true;
         } else if (event.type == SDL_KEYDOWN) {
             handle_realtime_camera_input(event.key.keysym.sym);
+        } else if (event.type == SDL_MOUSEBUTTONDOWN) {
+            if (event.button.button == SDL_BUTTON_RIGHT) {
+                mouse_captured_ = true;
+                SDL_SetRelativeMouseMode(SDL_TRUE);
+                std::cout << "Right mouse button pressed - mouse look enabled" << std::endl;
+            }
+        } else if (event.type == SDL_MOUSEBUTTONUP) {
+            if (event.button.button == SDL_BUTTON_RIGHT) {
+                mouse_captured_ = false;
+                SDL_SetRelativeMouseMode(SDL_FALSE);
+                std::cout << "Right mouse button released - mouse look disabled" << std::endl;
+            }
         } else if (event.type == SDL_MOUSEMOTION) {
-            handle_mouse_look(event.motion.x, event.motion.y);
+            if (mouse_captured_) {
+                handle_mouse_look(event.motion.xrel, event.motion.yrel);
+            }
         }
     }
     
@@ -113,6 +127,20 @@ void UIInput::handle_camera_input() {
         case 'h':
         case 'H':
             print_camera_controls();
+            break;
+        case 'g':
+        case 'G':
+            if (render_engine_) {
+                std::cout << "Starting render..." << std::endl;
+                render_engine_->start_render();
+            }
+            break;
+        case 't':
+        case 'T':
+            if (render_engine_) {
+                std::cout << "Stopping render..." << std::endl;
+                render_engine_->stop_render();
+            }
             break;
         case 'w':
         case 'W':
@@ -214,20 +242,40 @@ void UIInput::handle_realtime_camera_input(int keycode) {
         case SDLK_ESCAPE:
             quit_requested_ = true;
             break;
+        // TAB key removed - now using right-click for mouse capture
         case SDLK_p:
             std::cout << "Camera position: (" << std::fixed << std::setprecision(2)
                       << current_pos.x << ", " << current_pos.y << ", " << current_pos.z << ")" << std::endl;
             break;
         case SDLK_o:
             // Reset camera position and orientation
-            camera_yaw_ = 0.0f;
+            camera_yaw_ = -1.57f;  // Look forward (-Z)
             camera_pitch_ = 0.0f;
             set_camera_position(Vector3(0, 2, 3));
             update_camera_target();
+            // Display existing image without triggering render
+            if (render_engine_) {
+                render_engine_->display_image();
+            }
             std::cout << "Camera reset to origin" << std::endl;
             break;
         case SDLK_h:
             print_camera_controls();
+            break;
+        case SDLK_g:
+            std::cout << "G key pressed!" << std::endl;
+            if (render_engine_) {
+                std::cout << "Starting render..." << std::endl;
+                render_engine_->start_render();
+            } else {
+                std::cout << "No render engine available!" << std::endl;
+            }
+            break;
+        case SDLK_t:
+            if (render_engine_) {
+                std::cout << "Stopping render..." << std::endl;
+                render_engine_->stop_render();
+            }
             break;
     }
     
@@ -235,32 +283,19 @@ void UIInput::handle_realtime_camera_input(int keycode) {
         set_camera_position(new_pos);
         update_camera_target(); // Update target to maintain current view direction
         
-        // Trigger automatic re-render
+        // Only display existing image, don't trigger new render
         if (render_engine_) {
-            render_engine_->render();
             render_engine_->display_image();
         }
     }
 #endif
 }
 
-void UIInput::handle_mouse_look(int mouse_x, int mouse_y) {
+void UIInput::handle_mouse_look(int delta_x, int delta_y) {
 #ifdef USE_SDL
-    if (!mouse_captured_) {
-        // Initialize mouse position on first capture
-        last_mouse_x_ = mouse_x;
-        last_mouse_y_ = mouse_y;
-        mouse_captured_ = true;
-        return;
-    }
-    
-    // Calculate mouse movement delta
-    int delta_x = mouse_x - last_mouse_x_;
-    int delta_y = mouse_y - last_mouse_y_;
-    
-    // Update camera rotation angles
-    camera_yaw_ += delta_x * mouse_sensitivity_;
-    camera_pitch_ -= delta_y * mouse_sensitivity_; // Invert Y for natural feel
+    // Update camera rotation angles using relative mouse movement
+    camera_yaw_ += delta_x * mouse_sensitivity_;   // Fixed: move right = look right
+    camera_pitch_ += delta_y * mouse_sensitivity_; // Up/down as set previously
     
     // Clamp pitch to prevent camera flipping
     const float max_pitch = 1.5f; // ~85 degrees
@@ -270,13 +305,8 @@ void UIInput::handle_mouse_look(int mouse_x, int mouse_y) {
     // Update camera target based on new angles
     update_camera_target();
     
-    // Store current mouse position for next frame
-    last_mouse_x_ = mouse_x;
-    last_mouse_y_ = mouse_y;
-    
-    // Trigger re-render only for significant movement to improve performance
-    if (render_engine_ && (abs(delta_x) > 1 || abs(delta_y) > 1)) {
-        render_engine_->render();
+    // Only display existing image, don't trigger new render
+    if (render_engine_ && (abs(delta_x) > 0 || abs(delta_y) > 0)) {
         render_engine_->display_image();
     }
 #endif
@@ -287,11 +317,12 @@ void UIInput::update_camera_target() {
     
     Vector3 current_pos = scene_manager_->get_camera_position();
     
-    // Calculate new target based on yaw and pitch (spherical coordinates)
+    // Calculate new direction based on yaw and pitch (spherical coordinates)
+    // Fixed coordinate system: yaw rotates around Y, pitch around local X
     Vector3 direction;
-    direction.x = cos(camera_pitch_) * sin(camera_yaw_);
+    direction.x = cos(camera_pitch_) * cos(camera_yaw_);
     direction.y = sin(camera_pitch_);
-    direction.z = cos(camera_pitch_) * cos(camera_yaw_);
+    direction.z = cos(camera_pitch_) * sin(camera_yaw_);
     
     Vector3 target = current_pos + direction.normalized();
     Vector3 up = Vector3(0, 1, 0);
@@ -299,14 +330,16 @@ void UIInput::update_camera_target() {
     // Update the render engine with new camera orientation
     if (render_engine_) {
         render_engine_->set_camera_position(current_pos, target, up);
+        // Update camera preview to show movement
+        render_engine_->update_camera_preview(current_pos, target);
     }
 }
 
 void UIInput::get_camera_vectors(Vector3& forward, Vector3& right, Vector3& up) const {
-    // Calculate forward direction from yaw and pitch
-    forward.x = cos(camera_pitch_) * sin(camera_yaw_);
+    // Calculate forward direction from yaw and pitch (consistent with update_camera_target)
+    forward.x = cos(camera_pitch_) * cos(camera_yaw_);
     forward.y = sin(camera_pitch_);
-    forward.z = cos(camera_pitch_) * cos(camera_yaw_);
+    forward.z = cos(camera_pitch_) * sin(camera_yaw_);
     forward = forward.normalized();
     
     // World up vector
@@ -324,11 +357,14 @@ void UIInput::print_camera_controls() const {
     std::cout << "W/S - Move Forward/Backward" << std::endl;
     std::cout << "A/D - Move Right/Left" << std::endl;
     std::cout << "R/F - Move Up/Down" << std::endl;
-    std::cout << "MOUSE - Look around (first-person view)" << std::endl;
+    std::cout << "RIGHT MOUSE - Hold to look around" << std::endl;
     std::cout << "P   - Print current position" << std::endl;
     std::cout << "O   - Reset to origin (0 0 3)" << std::endl;
     std::cout << "H   - Show this help" << std::endl;
     std::cout << "Q/ESC - Quit application" << std::endl;
-    std::cout << "Move camera with keys and mouse for live preview!" << std::endl;
+    std::cout << "\n=== RENDER CONTROLS ===" << std::endl;
+    std::cout << "G   - Start rendering" << std::endl;
+    std::cout << "T   - Stop/cancel rendering" << std::endl;
+    std::cout << "\nCamera moves independently - use G to render from current position!" << std::endl;
     std::cout << "==================================" << std::endl;
 }

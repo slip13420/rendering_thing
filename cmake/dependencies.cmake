@@ -60,6 +60,16 @@ if(USE_SDL)
         set(SDL_TEST OFF CACHE BOOL "Build SDL2 tests")
         set(SDL_TESTS OFF CACHE BOOL "Build SDL2 tests")
         
+        # Disable audio support to avoid PipeWire compatibility issues
+        set(SDL_AUDIO OFF CACHE BOOL "Enable Audio subsystem")
+        set(SDL_PIPEWIRE OFF CACHE BOOL "Use Pipewire audio driver")
+        set(SDL_PIPEWIRE_SHARED OFF CACHE BOOL "Dynamically load Pipewire support")
+        
+        # Disable other unnecessary subsystems for a minimal build
+        set(SDL_HAPTIC OFF CACHE BOOL "Enable Haptic subsystem")
+        set(SDL_HIDAPI OFF CACHE BOOL "Enable HID API support")
+        set(SDL_JOYSTICK OFF CACHE BOOL "Enable Joystick subsystem")
+        
         # Platform-specific SDL2 options
         if(WIN32)
             set(SDL_DIRECTX ON CACHE BOOL "Enable DirectX support on Windows")

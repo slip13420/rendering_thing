@@ -5,6 +5,7 @@
 #include "core/camera.h"
 #include <vector>
 #include <memory>
+#include <atomic>
 
 // Forward declaration to avoid circular dependency
 class SceneManager;
@@ -15,10 +16,16 @@ public:
     ~PathTracer();
     
     void trace(int width, int height);
+    bool trace_interruptible(int width, int height);
     void set_scene_manager(std::shared_ptr<SceneManager> scene_manager);
     void set_camera(const Camera& camera);
     void set_max_depth(int depth) { max_depth_ = depth; }
     void set_samples_per_pixel(int samples) { samples_per_pixel_ = samples; }
+    
+    // Cancellation control
+    void request_stop() { stop_requested_ = true; }
+    void reset_stop_request() { stop_requested_ = false; }
+    bool is_stop_requested() const { return stop_requested_; }
     
     // Get the rendered image data
     const std::vector<Color>& get_image_data() const noexcept { return image_data_; }
@@ -42,4 +49,5 @@ private:
     int samples_per_pixel_;
     mutable std::mt19937 rng_;
     mutable std::uniform_real_distribution<float> uniform_dist_;
+    std::atomic<bool> stop_requested_;
 };

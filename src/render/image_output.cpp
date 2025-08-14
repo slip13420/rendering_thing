@@ -20,8 +20,29 @@ ImageOutput::~ImageOutput() {
 
 void ImageOutput::set_image_data(const std::vector<Color>& data, int width, int height) {
     image_data_ = data;
-    width_ = width;
-    height_ = height;
+    
+    // Check if dimensions changed and recreate texture if needed
+    if (width_ != width || height_ != height) {
+        width_ = width;
+        height_ = height;
+        
+        #ifdef USE_SDL
+        // Recreate texture with new dimensions
+        if (texture_) {
+            SDL_DestroyTexture(texture_);
+            texture_ = nullptr;
+        }
+        
+        if (renderer_ && window_open_) {
+            texture_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, width, height);
+            if (!texture_) {
+                std::cerr << "Failed to recreate texture: " << SDL_GetError() << std::endl;
+            } else {
+                std::cout << "Recreated texture with dimensions: " << width << "x" << height << std::endl;
+            }
+        }
+        #endif
+    }
 }
 
 void ImageOutput::save_to_file(const std::string& filename) {
@@ -69,6 +90,102 @@ void ImageOutput::clear() {
     image_data_.clear();
     width_ = 0;
     height_ = 0;
+}
+
+void ImageOutput::initialize_display(int width, int height) {
+    // Create a placeholder image - start with black
+    width_ = width;
+    height_ = height;
+    image_data_.resize(width * height);
+    
+    // Fill with black initially
+    Color black(0.0f, 0.0f, 0.0f, 1.0f);
+    for (auto& pixel : image_data_) {
+        pixel = black;
+    }
+    
+    // Create window if using SDL
+#ifdef USE_SDL
+    if (!window_open_) {
+        create_window("Path Tracer - Camera View", width, height);
+    }
+    #endif
+    
+    std::cout << "Display initialized: " << width << "x" << height << std::endl;
+}
+
+void ImageOutput::update_camera_preview(const Vector3& camera_pos, const Vector3& camera_target) {
+    if (image_data_.empty()) return;
+    
+    // Simple rasterized preview - render basic scene geometry
+    Vector3 camera_dir = (camera_target - camera_pos).normalized();
+    Vector3 camera_right = camera_dir.cross(Vector3(0, 1, 0)).normalized();
+    Vector3 camera_up = camera_right.cross(camera_dir).normalized();
+    
+    // Clear with sky color
+    Color sky_color(0.3f, 0.5f, 0.8f, 1.0f);
+    Color ground_color(0.2f, 0.3f, 0.1f, 1.0f);
+    
+    for (int y = 0; y < height_; y++) {
+        for (int x = 0; x < width_; x++) {
+            // Convert screen coordinates to camera ray direction
+            float u = (2.0f * x / width_) - 1.0f;
+            float v = 1.0f - (2.0f * y / height_);
+            
+            Vector3 ray_dir = (camera_dir + camera_right * u + camera_up * v).normalized();
+            
+            Color pixel_color = sky_color;
+            
+            // Simple ground plane at y = 0
+            if (ray_dir.y < 0 && camera_pos.y > 0) {
+                float t = -camera_pos.y / ray_dir.y;
+                if (t > 0) {
+                    Vector3 hit_point = camera_pos + ray_dir * t;
+                    
+                    // Checkerboard pattern on ground
+                    int checker_x = static_cast<int>(hit_point.x + 1000) / 2;
+                    int checker_z = static_cast<int>(hit_point.z + 1000) / 2;
+                    bool checker = (checker_x + checker_z) % 2 == 0;
+                    
+                    pixel_color = checker ? Color(0.3f, 0.4f, 0.2f) : Color(0.1f, 0.2f, 0.05f);
+                }
+            }
+            
+            // Simple sphere at origin with radius 1
+            Vector3 sphere_center(0, 1, 0);
+            float sphere_radius = 1.0f;
+            Vector3 to_sphere = camera_pos - sphere_center;
+            
+            float a = ray_dir.dot(ray_dir);
+            float b = 2.0f * ray_dir.dot(to_sphere);
+            float c = to_sphere.dot(to_sphere) - sphere_radius * sphere_radius;
+            
+            float discriminant = b * b - 4 * a * c;
+            if (discriminant >= 0) {
+                float t = (-b - std::sqrt(discriminant)) / (2 * a);
+                if (t > 0.1f) { // Avoid rendering behind camera
+                    Vector3 hit_point = camera_pos + ray_dir * t;
+                    Vector3 normal = (hit_point - sphere_center).normalized();
+                    
+                    // Simple lighting
+                    Vector3 light_dir(-0.3f, -1.0f, -0.3f);
+                    light_dir = light_dir.normalized();
+                    float light_intensity = std::max(0.0f, -normal.dot(light_dir));
+                    
+                    pixel_color = Color(0.8f, 0.3f, 0.3f) * (0.3f + 0.7f * light_intensity);
+                }
+            }
+            
+            image_data_[y * width_ + x] = pixel_color.clamped();
+        }
+    }
+    
+    // Update display
+#ifdef USE_SDL
+    if (window_open_) {
+        update_window();
+    }
+#endif
 }
 
 bool ImageOutput::create_window(const std::string& title, int width, int height) {
@@ -131,8 +248,16 @@ void ImageOutput::update_window() {
     
     update_texture();
     
+    // Get window size to ensure proper scaling
+    int window_width, window_height;
+    SDL_GetWindowSize(window_, &window_width, &window_height);
+    
     SDL_RenderClear(renderer_);
-    SDL_RenderCopy(renderer_, texture_, nullptr, nullptr);
+    
+    // Scale texture to fill entire window
+    SDL_Rect dest_rect = {0, 0, window_width, window_height};
+    SDL_RenderCopy(renderer_, texture_, nullptr, &dest_rect);
+    
     SDL_RenderPresent(renderer_);
 #endif
 }

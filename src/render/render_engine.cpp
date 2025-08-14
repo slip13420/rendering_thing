@@ -6,12 +6,14 @@
 #include <iostream>
 
 RenderEngine::RenderEngine() 
-    : initialized_(false), render_width_(800), render_height_(600) {
+    : initialized_(false), render_width_(800), render_height_(600),
+      render_state_(RenderState::IDLE), stop_requested_(false) {
     initialize();
 }
 
 RenderEngine::~RenderEngine() {
     if (initialized_) {
+        stop_render();
         shutdown();
     }
 }
@@ -33,6 +35,14 @@ void RenderEngine::initialize() {
     // Use camera from scene manager
     if (scene_manager_->get_camera()) {
         path_tracer_->set_camera(*scene_manager_->get_camera());
+    }
+    
+    // Restore render state
+    restore_render_state();
+    
+    // Initialize display with default size
+    if (image_output_) {
+        image_output_->initialize_display(render_width_, render_height_);
     }
     
     initialized_ = true;
@@ -58,6 +68,12 @@ void RenderEngine::render() {
 }
 
 void RenderEngine::shutdown() {
+    // Save render state before shutdown
+    save_render_state();
+    
+    // Stop any ongoing render
+    stop_render();
+    
     if (scene_manager_) {
         scene_manager_->shutdown();
     }
@@ -91,6 +107,8 @@ void RenderEngine::set_render_size(int width, int height) {
             path_tracer_->set_camera(*camera);
         }
     }
+    
+    // Note: Don't reinitialize display here as it can interfere with window sizing
 }
 
 void RenderEngine::set_max_depth(int depth) {
@@ -133,4 +151,185 @@ void RenderEngine::display_image() {
     } else {
         std::cerr << "No image output component available" << std::endl;
     }
+}
+
+void RenderEngine::update_camera_preview(const Vector3& camera_pos, const Vector3& camera_target) {
+    if (image_output_) {
+        image_output_->update_camera_preview(camera_pos, camera_target);
+    }
+}
+
+void RenderEngine::start_render() {
+    if (render_state_ == RenderState::RENDERING) {
+        std::cerr << "Cannot start render: already in progress" << std::endl;
+        return;
+    }
+    
+    // Reset state to IDLE if in COMPLETED, STOPPED, or ERROR state
+    if (render_state_ != RenderState::IDLE) {
+        set_render_state(RenderState::IDLE);
+    }
+    
+    if (!initialized_) {
+        std::cerr << "RenderEngine not initialized!" << std::endl;
+        set_render_state(RenderState::ERROR);
+        return;
+    }
+    
+    stop_requested_ = false;
+    set_render_state(RenderState::RENDERING);
+    
+    if (render_thread_.joinable()) {
+        render_thread_.join();
+    }
+    
+    render_thread_ = std::thread(&RenderEngine::render_worker, this);
+}
+
+void RenderEngine::stop_render() {
+    if (render_state_ != RenderState::RENDERING) {
+        return;
+    }
+    
+    stop_requested_ = true;
+    
+    // Signal PathTracer to stop
+    if (path_tracer_) {
+        path_tracer_->request_stop();
+    }
+    
+    if (render_thread_.joinable()) {
+        render_thread_.join();
+    }
+    
+    set_render_state(RenderState::STOPPED);
+}
+
+bool RenderEngine::is_rendering() const {
+    return render_state_ == RenderState::RENDERING;
+}
+
+RenderState RenderEngine::get_render_state() const {
+    return render_state_;
+}
+
+void RenderEngine::set_state_change_callback(std::function<void(RenderState)> callback) {
+    state_change_callback_ = callback;
+}
+
+void RenderEngine::render_worker() {
+    try {
+        std::cout << "Starting render orchestration (" << render_width_ << "x" << render_height_ << ")" << std::endl;
+        
+        // Render pipeline initialization
+        if (!validate_render_components()) {
+            set_render_state(RenderState::ERROR);
+            return;
+        }
+        
+        // Coordinate scene data and camera setup
+        synchronize_render_components();
+        
+        // Set up PathTracer cancellation
+        path_tracer_->reset_stop_request();
+        
+        // Execute path tracing with interruption support
+        std::cout << "Executing PathTracer with current scene configuration..." << std::endl;
+        bool completed = path_tracer_->trace_interruptible(render_width_, render_height_);
+        
+        // Check if we were stopped during rendering
+        if (stop_requested_ || !completed) {
+            cleanup_partial_render();
+            set_render_state(RenderState::STOPPED);
+            return;
+        }
+        
+        // Process render completion and result handling
+        process_render_completion();
+        
+        set_render_state(RenderState::COMPLETED);
+        std::cout << "Render orchestration completed successfully" << std::endl;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Render orchestration error: " << e.what() << std::endl;
+        cleanup_partial_render();
+        set_render_state(RenderState::ERROR);
+    }
+}
+
+void RenderEngine::set_render_state(RenderState state) {
+    render_state_ = state;
+    if (state_change_callback_) {
+        state_change_callback_(state);
+    }
+}
+
+void RenderEngine::save_render_state() {
+    // For basic persistence, we'll reset to IDLE on restart
+    // In a full implementation, this could save to file
+    std::cout << "Render state saved (currently: " << static_cast<int>(render_state_.load()) << ")" << std::endl;
+}
+
+void RenderEngine::restore_render_state() {
+    // On startup/recovery, always start in IDLE state
+    set_render_state(RenderState::IDLE);
+    stop_requested_ = false;
+    std::cout << "Render state restored to IDLE" << std::endl;
+}
+
+bool RenderEngine::validate_render_components() {
+    if (!path_tracer_) {
+        std::cerr << "Render validation failed: No PathTracer available" << std::endl;
+        return false;
+    }
+    
+    if (!scene_manager_) {
+        std::cerr << "Render validation failed: No SceneManager available" << std::endl;
+        return false;
+    }
+    
+    if (!image_output_) {
+        std::cerr << "Render validation failed: No ImageOutput available" << std::endl;
+        return false;
+    }
+    
+    if (render_width_ <= 0 || render_height_ <= 0) {
+        std::cerr << "Render validation failed: Invalid render dimensions" << std::endl;
+        return false;
+    }
+    
+    std::cout << "Render components validated successfully" << std::endl;
+    return true;
+}
+
+void RenderEngine::synchronize_render_components() {
+    // Ensure PathTracer has the latest scene data
+    if (path_tracer_ && scene_manager_) {
+        path_tracer_->set_scene_manager(scene_manager_);
+        std::cout << "PathTracer synchronized with SceneManager" << std::endl;
+    }
+    
+    // Ensure camera is synchronized
+    if (scene_manager_ && scene_manager_->get_camera() && path_tracer_) {
+        path_tracer_->set_camera(*scene_manager_->get_camera());
+        std::cout << "Camera synchronized with PathTracer" << std::endl;
+    }
+    
+    std::cout << "Render components synchronized" << std::endl;
+}
+
+void RenderEngine::process_render_completion() {
+    // Get the rendered image data and pass it to image output
+    const auto& image_data = path_tracer_->get_image_data();
+    image_output_->set_image_data(image_data, render_width_, render_height_);
+    
+    std::cout << "Render output processed and connected to Image Output module" << std::endl;
+}
+
+void RenderEngine::cleanup_partial_render() {
+    // Clean up any partial render state
+    std::cout << "Cleaning up partial render state" << std::endl;
+    
+    // PathTracer automatically handles its own cleanup on cancellation
+    // No additional cleanup needed for current implementation
 }

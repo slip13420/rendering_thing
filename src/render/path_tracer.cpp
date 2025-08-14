@@ -7,7 +7,8 @@
 // PathTracer implementation
 PathTracer::PathTracer() 
     : camera_(Vector3(0, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0)),
-      max_depth_(10), samples_per_pixel_(10), rng_(std::random_device{}()), uniform_dist_(0.0f, 1.0f) {
+      max_depth_(10), samples_per_pixel_(10), rng_(std::random_device{}()), uniform_dist_(0.0f, 1.0f),
+      stop_requested_(false) {
 }
 
 PathTracer::~PathTracer() {
@@ -22,8 +23,14 @@ void PathTracer::set_camera(const Camera& camera) {
 }
 
 void PathTracer::trace(int width, int height) {
+    trace_interruptible(width, height);
+}
+
+bool PathTracer::trace_interruptible(int width, int height) {
     image_data_.clear();
     image_data_.resize(width * height);
+    
+    reset_stop_request();
     
     std::cout << "Starting path tracing (" << width << "x" << height << ", " 
               << samples_per_pixel_ << " samples per pixel)" << std::endl;
@@ -31,14 +38,28 @@ void PathTracer::trace(int width, int height) {
     auto start_time = std::chrono::steady_clock::now();
     
     for (int j = height - 1; j >= 0; --j) {
-        if (j % 10 == 0) {
-            std::cout << "Scanlines remaining: " << j << std::endl;
+        // Check for cancellation every few scanlines
+        if (j % 5 == 0) {
+            if (stop_requested_) {
+                std::cout << "Path tracing cancelled at scanline " << j << std::endl;
+                return false;
+            }
+            
+            if (j % 10 == 0) {
+                std::cout << "Scanlines remaining: " << j << std::endl;
+            }
         }
         
         for (int i = 0; i < width; ++i) {
             Color pixel_color(0, 0, 0);
             
             for (int s = 0; s < samples_per_pixel_; ++s) {
+                // Check for cancellation during expensive inner loop
+                if (stop_requested_) {
+                    std::cout << "Path tracing cancelled during sampling" << std::endl;
+                    return false;
+                }
+                
                 float u = (float(i) + uniform_dist_(rng_)) / float(width);
                 float v = (float(j) + uniform_dist_(rng_)) / float(height);
                 
@@ -59,9 +80,15 @@ void PathTracer::trace(int width, int height) {
         }
     }
     
+    if (stop_requested_) {
+        std::cout << "Path tracing cancelled near completion" << std::endl;
+        return false;
+    }
+    
     auto end_time = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     std::cout << "Path tracing completed in " << duration.count() << " ms" << std::endl;
+    return true;
 }
 
 

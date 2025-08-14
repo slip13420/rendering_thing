@@ -27,7 +27,7 @@ public:
 private:
     void handle_camera_input();
     void handle_realtime_camera_input(int keycode);
-    void handle_mouse_look(int mouse_x, int mouse_y);
+    void handle_mouse_look(int delta_x, int delta_y);
     void update_camera_target();
     void get_camera_vectors(Vector3& forward, Vector3& right, Vector3& up) const;
     void print_camera_controls() const;
