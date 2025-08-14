@@ -2,33 +2,12 @@
 
 #include "core/common.h"
 #include "core/primitives.h"
+#include "core/camera.h"
 #include <vector>
 #include <memory>
 
 // Forward declaration to avoid circular dependency
 class SceneManager;
-
-class Camera {
-public:
-    Camera(const Vector3& position = Vector3(0, 0, 0),
-           const Vector3& target = Vector3(0, 0, -1),
-           const Vector3& up = Vector3(0, 1, 0),
-           float fov = 45.0f, float aspect_ratio = 16.0f/9.0f);
-    
-    // Default copy/move operations are fine for this simple class
-    Camera(const Camera&) = default;
-    Camera& operator=(const Camera&) = default;
-    Camera(Camera&&) = default;
-    Camera& operator=(Camera&&) = default;
-    
-    Ray get_ray(float u, float v) const;
-    
-private:
-    Vector3 position_;
-    Vector3 lower_left_corner_;
-    Vector3 horizontal_;
-    Vector3 vertical_;
-};
 
 class PathTracer {
 public:

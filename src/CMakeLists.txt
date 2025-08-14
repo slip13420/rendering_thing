@@ -4,23 +4,13 @@ set(SOURCES
     ui/ui_input.cpp
     core/scene_manager.cpp
     core/primitives.cpp
+    core/camera.cpp
     render/render_engine.cpp
     render/path_tracer.cpp
     render/image_output.cpp
 )
 
-set(HEADERS
-    ui/ui_manager.h
-    ui/ui_input.h
-    core/scene_manager.h
-    core/primitives.h
-    render/render_engine.h
-    render/path_tracer.h
-    render/image_output.h
-    core/common.h
-)
-
-add_executable(path_tracer_renderer ${SOURCES} ${HEADERS})
+add_executable(path_tracer_renderer ${SOURCES})
 
 # Compiler-specific warning and optimization flags
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")

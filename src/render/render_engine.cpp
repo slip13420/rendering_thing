@@ -1,6 +1,7 @@
 #include "render_engine.h"
 #include "path_tracer.h"
 #include "core/scene_manager.h"
+#include "core/camera.h"
 #include "image_output.h"
 #include <iostream>
 
@@ -29,10 +30,10 @@ void RenderEngine::initialize() {
     path_tracer_->set_max_depth(10);
     path_tracer_->set_samples_per_pixel(10);
     
-    // Set default camera
-    Camera default_camera(Vector3(0, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0), 
-                         45.0f, float(render_width_) / float(render_height_));
-    path_tracer_->set_camera(default_camera);
+    // Use camera from scene manager
+    if (scene_manager_->get_camera()) {
+        path_tracer_->set_camera(*scene_manager_->get_camera());
+    }
     
     initialized_ = true;
     std::cout << "RenderEngine initialized with path tracing support" << std::endl;
@@ -82,11 +83,13 @@ void RenderEngine::set_render_size(int width, int height) {
     render_width_ = width;
     render_height_ = height;
     
-    // Update camera aspect ratio
-    if (path_tracer_) {
-        Camera updated_camera(Vector3(0, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0), 
-                            45.0f, float(width) / float(height));
-        path_tracer_->set_camera(updated_camera);
+    // Update camera aspect ratio in scene manager's camera
+    if (scene_manager_ && scene_manager_->get_camera()) {
+        auto camera = scene_manager_->get_camera();
+        camera->set_aspect_ratio(float(width) / float(height));
+        if (path_tracer_) {
+            path_tracer_->set_camera(*camera);
+        }
     }
 }
 
@@ -103,9 +106,16 @@ void RenderEngine::set_samples_per_pixel(int samples) {
 }
 
 void RenderEngine::set_camera_position(const Vector3& position, const Vector3& target, const Vector3& up) {
-    if (path_tracer_) {
-        Camera camera(position, target, up, 45.0f, float(render_width_) / float(render_height_));
-        path_tracer_->set_camera(camera);
+    if (scene_manager_) {
+        // Update the camera in scene manager
+        scene_manager_->set_camera_position(position);
+        scene_manager_->set_camera_target(target);
+        scene_manager_->set_camera_up(up);
+        
+        // Update path tracer with the modified camera
+        if (path_tracer_ && scene_manager_->get_camera()) {
+            path_tracer_->set_camera(*scene_manager_->get_camera());
+        }
     }
 }
 

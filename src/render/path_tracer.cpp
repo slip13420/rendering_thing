@@ -1,36 +1,13 @@
 #include "path_tracer.h"
 #include "core/scene_manager.h"
+#include "core/camera.h"
 #include <iostream>
 #include <chrono>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
-// Camera implementation
-Camera::Camera(const Vector3& position, const Vector3& target, const Vector3& up,
-               float fov, float aspect_ratio) : position_(position) {
-    float theta = fov * M_PI / 180.0f;
-    float half_height = std::tan(theta / 2.0f);
-    float half_width = aspect_ratio * half_height;
-    
-    Vector3 w = (position - target).normalized();
-    Vector3 u = up.cross(w).normalized();
-    Vector3 v = w.cross(u);
-    
-    lower_left_corner_ = position - half_width * u - half_height * v - w;
-    horizontal_ = u * (2.0f * half_width);
-    vertical_ = v * (2.0f * half_height);
-}
-
-Ray Camera::get_ray(float u, float v) const {
-    Vector3 direction = lower_left_corner_ + horizontal_ * u + vertical_ * v - position_;
-    return Ray(position_, direction);
-}
-
 // PathTracer implementation
 PathTracer::PathTracer() 
-    : max_depth_(10), samples_per_pixel_(10), rng_(std::random_device{}()), uniform_dist_(0.0f, 1.0f) {
+    : camera_(Vector3(0, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0)),
+      max_depth_(10), samples_per_pixel_(10), rng_(std::random_device{}()), uniform_dist_(0.0f, 1.0f) {
 }
 
 PathTracer::~PathTracer() {

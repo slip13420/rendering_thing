@@ -4,6 +4,12 @@
 #include <vector>
 #include <string>
 
+#ifdef USE_SDL
+struct SDL_Window;
+struct SDL_Renderer;
+struct SDL_Texture;
+#endif
+
 class ImageOutput {
 public:
     ImageOutput();
@@ -13,6 +19,12 @@ public:
     void save_to_file(const std::string& filename);
     void display_to_screen();
     void clear();
+    
+    // SDL window management
+    bool create_window(const std::string& title, int width, int height);
+    void update_window();
+    void close_window();
+    bool is_window_open() const;
     
     // Get image properties
     int width() const { return width_; }
@@ -24,5 +36,13 @@ private:
     int width_;
     int height_;
     
+#ifdef USE_SDL
+    SDL_Window* window_;
+    SDL_Renderer* renderer_;
+    SDL_Texture* texture_;
+#endif
+    bool window_open_;
+    
     void save_as_ppm(const std::string& filename);
+    void update_texture();
 };
