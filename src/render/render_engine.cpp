@@ -174,8 +174,14 @@ void RenderEngine::update_camera_preview(const Vector3& camera_pos, const Vector
         return;
     }
     
-    // Stop any existing progressive render for camera preview (only camera preview renders)
-    if (is_progressive_rendering() && !manual_progressive_mode_) {
+    // Stop any existing progressive render for camera preview (only non-manual renders)
+    if (is_progressive_rendering()) {
+        // Double-check manual mode before stopping (race condition protection)
+        if (manual_progressive_mode_) {
+            std::cout << "Skipping camera preview - manual progressive render detected" << std::endl;
+            return;
+        }
+        
         stop_progressive_render();
         
         // Brief wait for cleanup
@@ -193,9 +199,17 @@ void RenderEngine::update_camera_preview(const Vector3& camera_pos, const Vector
     preview_config.updateInterval = 0.08f;  // Very fast updates for real-time feel
     
     std::cout << "Starting camera preview progressive render..." << std::endl;
-    start_progressive_render(preview_config);
-    // Camera preview renders should not be treated as manual renders
+    
+    // Force manual mode to false for camera preview, then start
+    bool saved_manual_mode = manual_progressive_mode_;
     manual_progressive_mode_ = false;
+    
+    start_progressive_render(preview_config);
+    
+    // Restore previous manual mode if it was true (shouldn't happen, but safety)
+    if (saved_manual_mode) {
+        std::cout << "WARNING: Camera preview interrupted manual progressive render" << std::endl;
+    }
 }
 
 void RenderEngine::start_render() {
