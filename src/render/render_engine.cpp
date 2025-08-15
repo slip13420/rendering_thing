@@ -474,6 +474,15 @@ void RenderEngine::cleanup_partial_render() {
     // Clean up any partial render state
     std::cout << "Cleaning up partial render state" << std::endl;
     
+    // Preserve the current image data from PathTracer when stopped
+    // This allows saving partial renders
+    if (path_tracer_ && image_output_) {
+        const auto& image_data = path_tracer_->get_image_data();
+        if (!image_data.empty()) {
+            image_output_->set_image_data(image_data, render_width_, render_height_);
+            std::cout << "Partial render image data preserved for saving" << std::endl;
+        }
+    }
+    
     // PathTracer automatically handles its own cleanup on cancellation
-    // No additional cleanup needed for current implementation
 }

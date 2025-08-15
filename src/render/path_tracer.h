@@ -14,8 +14,8 @@ class SceneManager;
 // Progressive rendering configuration
 struct ProgressiveConfig {
     int initialSamples = 1;      // Quick preview sample count
-    int targetSamples = 1000;    // Final quality sample count
-    int progressiveSteps = 10;   // Number of progressive improvement passes
+    int targetSamples = 2000;    // Final quality sample count
+    int progressiveSteps = 15;   // Number of progressive improvement passes
     float updateInterval = 0.5f; // Seconds between progressive updates
 };
 

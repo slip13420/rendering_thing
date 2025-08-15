@@ -284,12 +284,32 @@ void UIManager::render_save_button() {
 }
 
 bool UIManager::is_save_enabled() const {
-    return (current_render_state_ == RenderState::COMPLETED) && image_output_;
+    // Allow saving if render completed OR if it was stopped (partial render still has image data)
+    return ((current_render_state_ == RenderState::COMPLETED) || 
+            (current_render_state_ == RenderState::STOPPED)) && 
+           image_output_;
 }
 
 void UIManager::trigger_save_dialog() {
     if (!is_save_enabled()) {
         std::cout << "Save is not currently available" << std::endl;
+        
+        // Provide specific feedback about why save is not available
+        if (!image_output_) {
+            std::cout << "Reason: Image output not available" << std::endl;
+        } else {
+            std::cout << "Reason: No completed render to save" << std::endl;
+            std::cout << "Current render state: ";
+            switch (current_render_state_) {
+                case RenderState::IDLE: std::cout << "IDLE (no render started)"; break;
+                case RenderState::RENDERING: std::cout << "RENDERING (in progress)"; break;
+                case RenderState::COMPLETED: std::cout << "COMPLETED"; break;
+                case RenderState::STOPPED: std::cout << "STOPPED"; break;
+                case RenderState::ERROR: std::cout << "ERROR"; break;
+            }
+            std::cout << std::endl;
+            std::cout << "Try pressing 'V' after a render completes (G or M key)" << std::endl;
+        }
         return;
     }
     

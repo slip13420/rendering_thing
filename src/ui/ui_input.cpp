@@ -277,10 +277,10 @@ void UIInput::handle_realtime_camera_input(int keycode) {
             if (render_engine_) {
                 ProgressiveConfig config;
                 config.initialSamples = 1;
-                config.targetSamples = 100;
-                config.progressiveSteps = 8;
-                config.updateInterval = 0.3f;
-                std::cout << "Starting progressive render (1->100 samples, 8 steps)..." << std::endl;
+                config.targetSamples = 1000;
+                config.progressiveSteps = 12;
+                config.updateInterval = 0.4f;
+                std::cout << "Starting progressive render (1->1000 samples, 12 steps)..." << std::endl;
                 render_engine_->start_progressive_render(config);
             } else {
                 std::cout << "No render engine available!" << std::endl;
@@ -387,7 +387,7 @@ void UIInput::print_camera_controls() const {
     std::cout << "Q/ESC - Quit application" << std::endl;
     std::cout << "\n=== RENDER CONTROLS ===" << std::endl;
     std::cout << "G   - Start standard rendering" << std::endl;
-    std::cout << "M   - Start progressive rendering (1->100 samples)" << std::endl;
+    std::cout << "M   - Start progressive rendering (1->1000 samples)" << std::endl;
     std::cout << "T   - Stop/cancel rendering" << std::endl;
     std::cout << "V   - Save rendered image (after completion)" << std::endl;
     std::cout << "\nCamera moves independently - use G to render from current position!" << std::endl;
