@@ -1,6 +1,8 @@
 #include "core/common.h"
 #include "ui/ui_manager.h"
+#include "ui/ui_input.h"
 #include "render/render_engine.h"
+#include "render/image_output.h"
 #include "core/scene_manager.h"
 #include <iostream>
 #include <memory>
@@ -30,21 +32,31 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     try {
         auto render_engine = std::make_shared<RenderEngine>();
         auto ui_manager = std::make_unique<UIManager>();
+        auto image_output = std::make_shared<ImageOutput>();
         
         // Get scene manager from render engine to connect components
         auto scene_manager = std::make_shared<SceneManager>();
         scene_manager->initialize();
         render_engine->set_scene_manager(scene_manager);
+        render_engine->set_image_output(image_output);
         
-        // Connect UI to render engine and scene manager
+        // Connect UI to render engine, scene manager, and image output
         ui_manager->set_scene_manager(scene_manager);
         ui_manager->set_render_engine(render_engine);
+        ui_manager->set_image_output(image_output);
         ui_manager->initialize();
         
         // Connect progress callback from render engine to UI manager
         render_engine->set_progress_callback([&ui_manager](int w, int h, int current, int target) {
             ui_manager->update_progress(w, h, current, target);
         });
+        
+        // Connect save callback from UI input to UI manager
+        if (auto ui_input = ui_manager->get_ui_input()) {
+            ui_input->set_save_callback([&ui_manager]() {
+                ui_manager->trigger_save_dialog();
+            });
+        }
         
         std::cout << "Application initialized successfully!" << std::endl;
         

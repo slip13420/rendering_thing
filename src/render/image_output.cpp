@@ -2,6 +2,11 @@
 #include <fstream>
 #include <iostream>
 #include <chrono>
+#include <algorithm>
+#include <cstring>
+#include <ctime>
+#include <iomanip>
+#include <stdexcept>
 
 #ifdef USE_SDL
 #include <SDL.h>
@@ -52,14 +57,44 @@ void ImageOutput::save_to_file(const std::string& filename) {
         return;
     }
     
-    // Determine format by file extension
-    std::string extension = filename.substr(filename.find_last_of('.') + 1);
+    ImageFormat format = determine_format_from_extension(filename);
+    save_with_format(filename, format);
+}
+
+void ImageOutput::save_to_file(const std::string& filename, const SaveOptions& options) {
+    if (image_data_.empty()) {
+        std::cerr << "No image data to save" << std::endl;
+        return;
+    }
     
-    if (extension == "ppm") {
-        save_as_ppm(filename);
-    } else {
-        std::cout << "Defaulting to PPM format for file: " << filename << std::endl;
-        save_as_ppm(filename);
+    save_with_format(filename, options.format, options.jpeg_quality);
+}
+
+bool ImageOutput::save_with_format(const std::string& filename, ImageFormat format, int jpeg_quality) {
+    if (image_data_.empty()) {
+        std::cerr << "No image data to save" << std::endl;
+        return false;
+    }
+    
+    try {
+        switch (format) {
+            case ImageFormat::PNG:
+                save_as_png(filename);
+                break;
+            case ImageFormat::JPEG:
+                save_as_jpeg(filename, jpeg_quality);
+                break;
+            case ImageFormat::PPM:
+                save_as_ppm(filename);
+                break;
+            default:
+                std::cerr << "Unsupported image format" << std::endl;
+                return false;
+        }
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "Error saving image: " << e.what() << std::endl;
+        return false;
     }
 }
 
@@ -301,15 +336,111 @@ void ImageOutput::update_texture() {
 #endif
 }
 
-void ImageOutput::save_as_ppm(const std::string& filename) {
-    std::ofstream file(filename);
-    if (!file.is_open()) {
-        std::cerr << "Could not open file for writing: " << filename << std::endl;
-        return;
+ImageFormat ImageOutput::determine_format_from_extension(const std::string& filename) {
+    size_t dot_pos = filename.find_last_of('.');
+    if (dot_pos == std::string::npos) {
+        return ImageFormat::PNG; // Default to PNG
     }
     
-    // PPM header
+    std::string extension = filename.substr(dot_pos + 1);
+    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+    
+    if (extension == "png") {
+        return ImageFormat::PNG;
+    } else if (extension == "jpg" || extension == "jpeg") {
+        return ImageFormat::JPEG;
+    } else if (extension == "ppm") {
+        return ImageFormat::PPM;
+    } else {
+        return ImageFormat::PNG; // Default to PNG for unknown extensions
+    }
+}
+
+std::vector<uint8_t> ImageOutput::convert_to_rgb24() const {
+    std::vector<uint8_t> rgb_data;
+    rgb_data.reserve(width_ * height_ * 3);
+    
+    for (const auto& pixel : image_data_) {
+        Color clamped_pixel = pixel.clamped();
+        rgb_data.push_back(static_cast<uint8_t>(255 * clamped_pixel.r));
+        rgb_data.push_back(static_cast<uint8_t>(255 * clamped_pixel.g));
+        rgb_data.push_back(static_cast<uint8_t>(255 * clamped_pixel.b));
+    }
+    
+    return rgb_data;
+}
+
+void ImageOutput::apply_gamma_correction(std::vector<uint8_t>& data) const {
+    const float gamma = 2.2f;
+    const float inv_gamma = 1.0f / gamma;
+    
+    for (auto& byte : data) {
+        float normalized = byte / 255.0f;
+        float corrected = std::pow(normalized, inv_gamma);
+        byte = static_cast<uint8_t>(std::clamp(corrected * 255.0f, 0.0f, 255.0f));
+    }
+}
+
+void ImageOutput::save_as_png(const std::string& filename, bool include_metadata) {
+    // Simple PNG implementation without external libraries
+    std::vector<uint8_t> rgb_data = convert_to_rgb24();
+    
+    // For now, fall back to PPM with a message about PNG support
+    std::cout << "PNG support requires libpng. Saving as PPM instead: " << filename << std::endl;
+    std::string ppm_filename = filename;
+    size_t dot_pos = ppm_filename.find_last_of('.');
+    if (dot_pos != std::string::npos) {
+        ppm_filename = ppm_filename.substr(0, dot_pos) + ".ppm";
+    } else {
+        ppm_filename += ".ppm";
+    }
+    save_as_ppm(ppm_filename);
+}
+
+void ImageOutput::save_as_jpeg(const std::string& filename, int quality, bool include_metadata) {
+    // Simple JPEG implementation without external libraries
+    std::vector<uint8_t> rgb_data = convert_to_rgb24();
+    
+    // For now, fall back to PPM with a message about JPEG support
+    std::cout << "JPEG support requires libjpeg. Saving as PPM instead: " << filename << std::endl;
+    std::string ppm_filename = filename;
+    size_t dot_pos = ppm_filename.find_last_of('.');
+    if (dot_pos != std::string::npos) {
+        ppm_filename = ppm_filename.substr(0, dot_pos) + ".ppm";
+    } else {
+        ppm_filename += ".ppm";
+    }
+    save_as_ppm(ppm_filename);
+}
+
+void ImageOutput::save_as_ppm(const std::string& filename) {
+    // Check if filename is valid
+    if (filename.empty()) {
+        throw std::runtime_error("Filename cannot be empty");
+    }
+    
+    // Check for invalid characters in filename
+    const std::string invalid_chars = "<>:\"|?*";
+    if (filename.find_first_of(invalid_chars) != std::string::npos) {
+        throw std::runtime_error("Filename contains invalid characters");
+    }
+    
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open file for writing: " + filename + 
+                                  " (check permissions and disk space)");
+    }
+    
+    // Get current time for metadata
+    auto now = std::time(nullptr);
+    auto local_time = *std::localtime(&now);
+    
+    // PPM header with metadata
     file << "P3\n";
+    file << "# Path Tracer Renderer v1.0.0\n";
+    file << "# Generated on " << std::put_time(&local_time, "%Y-%m-%d %H:%M:%S") << "\n";
+    file << "# Resolution: " << width_ << "x" << height_ << "\n";
+    file << "# Pixel count: " << (width_ * height_) << "\n";
     file << width_ << " " << height_ << "\n";
     file << "255\n";
     
@@ -321,8 +452,21 @@ void ImageOutput::save_as_ppm(const std::string& filename) {
         int b = static_cast<int>(255 * clamped_pixel.b);
         
         file << r << " " << g << " " << b << "\n";
+        
+        // Check for write errors
+        if (file.fail()) {
+            file.close();
+            throw std::runtime_error("Error writing to file: " + filename + 
+                                      " (possibly out of disk space)");
+        }
+    }
+    
+    // Check final state and close
+    if (!file.good()) {
+        file.close();
+        throw std::runtime_error("File write completed with errors: " + filename);
     }
     
     file.close();
-    std::cout << "Image saved to " << filename << std::endl;
+    std::cout << "Image saved successfully: " << filename << std::endl;
 }

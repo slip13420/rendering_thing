@@ -1,9 +1,22 @@
 #pragma once
 
 #include "core/common.h"
-#include <vector>
 #include <string>
+#include <vector>
 #include <functional>
+
+enum class ImageFormat {
+    PNG,     // Lossless compression
+    JPEG,    // Lossy compression with quality setting
+    PPM      // Simple uncompressed format (legacy)
+};
+
+struct SaveOptions {
+    ImageFormat format = ImageFormat::PNG;
+    int jpeg_quality = 90;     // 1-100 for JPEG compression
+    bool include_metadata = true;
+    std::string default_filename;
+};
 
 #ifdef USE_SDL
 struct SDL_Window;
@@ -19,10 +32,17 @@ public:
     ImageOutput();
     ~ImageOutput();
     
+    // Image data management
     void set_image_data(const std::vector<Color>& data, int width, int height);
-    void save_to_file(const std::string& filename);
-    void display_to_screen();
     void clear();
+    
+    // File operations
+    void save_to_file(const std::string& filename);
+    void save_to_file(const std::string& filename, const SaveOptions& options);
+    bool save_with_format(const std::string& filename, ImageFormat format, int jpeg_quality = 90);
+    
+    // Display operations
+    void display_to_screen();
     void initialize_display(int width, int height);
     void update_camera_preview(const Vector3& camera_pos, const Vector3& camera_target);
     
@@ -30,18 +50,25 @@ public:
     void update_progressive_display(const std::vector<Color>& data, int width, int height, int current_samples, int target_samples);
     void set_progressive_callback(ProgressUpdateCallback callback) { progress_callback_ = callback; }
     
-    // SDL window management
-    bool create_window(const std::string& title, int width, int height);
-    void update_window();
-    void close_window();
+    // Window management
     bool is_window_open() const;
+    void close_window();
     
-    // Get image properties
-    int width() const { return width_; }
-    int height() const { return height_; }
-    const std::vector<Color>& get_data() const { return image_data_; }
+    // Legacy method names for compatibility
+    void saveToFile(const std::string& filename) { save_to_file(filename); }
+    void displayToScreen() { display_to_screen(); }
     
 private:
+    bool create_window(const std::string& title, int width, int height);
+    void update_window();
+    void update_texture();
+    void save_as_ppm(const std::string& filename);
+    void save_as_png(const std::string& filename, bool include_metadata = true);
+    void save_as_jpeg(const std::string& filename, int quality = 90, bool include_metadata = true);
+    ImageFormat determine_format_from_extension(const std::string& filename);
+    std::vector<uint8_t> convert_to_rgb24() const;
+    void apply_gamma_correction(std::vector<uint8_t>& data) const;
+    
     std::vector<Color> image_data_;
     int width_;
     int height_;
@@ -54,7 +81,4 @@ private:
     SDL_Renderer* renderer_;
     SDL_Texture* texture_;
 #endif
-    
-    void save_as_ppm(const std::string& filename);
-    void update_texture();
 };

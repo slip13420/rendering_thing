@@ -2,9 +2,13 @@
 #include "ui_input.h"
 #include "core/scene_manager.h"
 #include "render/render_engine.h"
+#include "render/image_output.h"
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <ctime>
+#include <algorithm>
+#include <stdexcept>
 
 UIManager::UIManager() : initialized_(false), current_render_state_(RenderState::IDLE), show_progress_details_(false) {
     
@@ -42,6 +46,7 @@ void UIManager::render() {
     render_status_display();
     render_start_button();
     render_stop_button();
+    render_save_button();
     render_progressive_controls();
     render_progress_display();
 }
@@ -71,6 +76,11 @@ void UIManager::set_render_engine(std::shared_ptr<RenderEngine> render_engine) {
             [this](RenderState state) { on_render_state_changed(state); });
         current_render_state_ = render_engine_->get_render_state();
     }
+}
+
+void UIManager::set_image_output(std::shared_ptr<ImageOutput> image_output) {
+    image_output_ = image_output;
+    std::cout << "UIManager: Image output dependency set" << std::endl;
 }
 
 bool UIManager::should_quit() const {
@@ -249,4 +259,154 @@ std::string UIManager::format_time(float seconds) const {
         oss << hours << "h " << minutes << "m";
         return oss.str();
     }
+}
+
+void UIManager::render_save_button() {
+    if (!image_output_) {
+        std::cout << "[Save Button: DISABLED - No image output]" << std::endl;
+        return;
+    }
+    
+    bool enabled = is_save_enabled();
+    
+    std::cout << "[Save Button: " << (enabled ? "ENABLED" : "DISABLED") << "]" << std::endl;
+    
+    if (enabled) {
+        std::cout << "  Click to save rendered image" << std::endl;
+    } else if (current_render_state_ == RenderState::RENDERING) {
+        std::cout << "  Save will be available after render completes" << std::endl;
+    }
+}
+
+bool UIManager::is_save_enabled() const {
+    return (current_render_state_ == RenderState::COMPLETED) && image_output_;
+}
+
+void UIManager::trigger_save_dialog() {
+    if (!is_save_enabled()) {
+        std::cout << "Save is not currently available" << std::endl;
+        return;
+    }
+    
+    show_save_dialog();
+}
+
+void UIManager::show_save_dialog() {
+    std::cout << "\n=== Save Rendered Image ===" << std::endl;
+    
+    // Get default filename
+    std::string default_filename = get_default_filename();
+    
+    std::cout << "Enter filename (default: " << default_filename << "): ";
+    std::string user_filename;
+    std::getline(std::cin, user_filename);
+    
+    if (user_filename.empty()) {
+        user_filename = default_filename;
+    }
+    
+    // Validate filename
+    if (user_filename.find_first_of("<>:\"|?*") != std::string::npos) {
+        std::cout << "Error: Filename contains invalid characters (<>:\"|?*)" << std::endl;
+        std::cout << "Please try again with a valid filename." << std::endl;
+        return;
+    }
+    
+    // Get format choice
+    std::cout << "\nSelect image format:" << std::endl;
+    std::cout << "1. PNG (lossless, recommended)" << std::endl;
+    std::cout << "2. JPEG (lossy, smaller file)" << std::endl;
+    std::cout << "3. PPM (uncompressed)" << std::endl;
+    std::cout << "Enter choice (1-3, default: 1): ";
+    
+    std::string choice;
+    std::getline(std::cin, choice);
+    
+    ImageFormat format = ImageFormat::PNG; // default
+    int quality = 90; // default JPEG quality
+    
+    if (choice == "2") {
+        format = ImageFormat::JPEG;
+        std::cout << "Enter JPEG quality (1-100, default: 90): ";
+        std::string quality_str;
+        std::getline(std::cin, quality_str);
+        if (!quality_str.empty()) {
+            try {
+                quality = std::stoi(quality_str);
+                quality = std::max(1, std::min(100, quality));
+            } catch (const std::exception&) {
+                quality = 90;
+            }
+        }
+    } else if (choice == "3") {
+        format = ImageFormat::PPM;
+    }
+    
+    // Ensure correct file extension
+    std::string final_filename = user_filename;
+    std::string expected_ext;
+    
+    switch (format) {
+        case ImageFormat::PNG:
+            expected_ext = ".png";
+            break;
+        case ImageFormat::JPEG:
+            expected_ext = ".jpg";
+            break;
+        case ImageFormat::PPM:
+            expected_ext = ".ppm";
+            break;
+    }
+    
+    // Add extension if not present
+    size_t dot_pos = final_filename.find_last_of('.');
+    if (dot_pos == std::string::npos || 
+        final_filename.substr(dot_pos) != expected_ext) {
+        final_filename += expected_ext;
+    }
+    
+    // Perform save
+    std::cout << "Saving image..." << std::endl;
+    
+    try {
+        bool success = save_image_with_options(final_filename, format, quality);
+        
+        if (success) {
+            std::cout << "SUCCESS: Image saved to " << final_filename << std::endl;
+        } else {
+            std::cout << "FAILED: Could not save image to " << final_filename << std::endl;
+            std::cout << "Please check file permissions and available disk space." << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cout << "ERROR: " << e.what() << std::endl;
+        std::cout << "Save operation cancelled." << std::endl;
+    }
+    
+    std::cout << "=========================" << std::endl;
+}
+
+bool UIManager::save_image_with_options(const std::string& filename, ImageFormat format, int quality) {
+    if (!image_output_) {
+        std::cerr << "No image output available for saving" << std::endl;
+        return false;
+    }
+    
+    return image_output_->save_with_format(filename, format, quality);
+}
+
+std::string UIManager::get_default_filename() const {
+    // Generate filename with timestamp
+    auto now = std::time(nullptr);
+    auto local_time = *std::localtime(&now);
+    
+    std::ostringstream oss;
+    oss << "render_" 
+        << std::setfill('0') << std::setw(4) << (local_time.tm_year + 1900)
+        << "-" << std::setw(2) << (local_time.tm_mon + 1)
+        << "-" << std::setw(2) << local_time.tm_mday
+        << "_" << std::setw(2) << local_time.tm_hour
+        << "-" << std::setw(2) << local_time.tm_min
+        << "-" << std::setw(2) << local_time.tm_sec;
+    
+    return oss.str();
 }

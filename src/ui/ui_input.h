@@ -2,10 +2,12 @@
 
 #include "core/common.h"
 #include <memory>
+#include <functional>
 
 // Forward declarations
 class SceneManager;
 class RenderEngine;
+class UIManager;
 
 class UIInput {
 public:
@@ -18,6 +20,9 @@ public:
     // Set dependencies for camera control
     void set_scene_manager(std::shared_ptr<SceneManager> scene_manager);
     void set_render_engine(std::shared_ptr<RenderEngine> render_engine);
+    
+    // Set callback for save functionality
+    void set_save_callback(std::function<void()> callback) { save_callback_ = callback; }
     
     // Camera position controls
     Vector3 get_camera_position() const;
@@ -35,6 +40,7 @@ private:
     bool quit_requested_;
     std::shared_ptr<SceneManager> scene_manager_;
     std::shared_ptr<RenderEngine> render_engine_;
+    std::function<void()> save_callback_;
     
     // Camera movement settings
     float camera_move_speed_;

@@ -5,6 +5,19 @@
 #include <vector>
 #include <functional>
 
+enum class ImageFormat {
+    PNG,     // Lossless compression
+    JPEG,    // Lossy compression with quality setting
+    PPM      // Simple uncompressed format (legacy)
+};
+
+struct SaveOptions {
+    ImageFormat format = ImageFormat::PNG;
+    int jpeg_quality = 90;     // 1-100 for JPEG compression
+    bool include_metadata = true;
+    std::string default_filename;
+};
+
 #ifdef USE_SDL
 struct SDL_Window;
 struct SDL_Renderer;
@@ -25,6 +38,8 @@ public:
     
     // File operations
     void save_to_file(const std::string& filename);
+    void save_to_file(const std::string& filename, const SaveOptions& options);
+    bool save_with_format(const std::string& filename, ImageFormat format, int jpeg_quality = 90);
     
     // Display operations
     void display_to_screen();
@@ -48,6 +63,11 @@ private:
     void update_window();
     void update_texture();
     void save_as_ppm(const std::string& filename);
+    void save_as_png(const std::string& filename, bool include_metadata = true);
+    void save_as_jpeg(const std::string& filename, int quality = 90, bool include_metadata = true);
+    ImageFormat determine_format_from_extension(const std::string& filename);
+    std::vector<uint8_t> convert_to_rgb24() const;
+    void apply_gamma_correction(std::vector<uint8_t>& data) const;
     
     std::vector<Color> image_data_;
     int width_;

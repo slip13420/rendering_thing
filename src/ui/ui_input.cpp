@@ -292,6 +292,14 @@ void UIInput::handle_realtime_camera_input(int keycode) {
                 render_engine_->stop_render();
             }
             break;
+        case SDLK_v:
+            std::cout << "V key pressed - Save Image!" << std::endl;
+            if (save_callback_) {
+                save_callback_();
+            } else {
+                std::cout << "Save functionality not available" << std::endl;
+            }
+            break;
     }
     
     if (moved) {
@@ -381,6 +389,7 @@ void UIInput::print_camera_controls() const {
     std::cout << "G   - Start standard rendering" << std::endl;
     std::cout << "M   - Start progressive rendering (1->100 samples)" << std::endl;
     std::cout << "T   - Stop/cancel rendering" << std::endl;
+    std::cout << "V   - Save rendered image (after completion)" << std::endl;
     std::cout << "\nCamera moves independently - use G to render from current position!" << std::endl;
     std::cout << "==================================" << std::endl;
 }
