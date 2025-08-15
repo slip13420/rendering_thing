@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <atomic>
 
 enum class ImageFormat {
     PNG,     // Lossless compression
@@ -50,6 +51,9 @@ public:
     void update_progressive_display(const std::vector<Color>& data, int width, int height, int current_samples, int target_samples);
     void set_progressive_callback(ProgressUpdateCallback callback) { progress_callback_ = callback; }
     
+    // Main thread progressive update processing
+    void process_pending_progressive_updates();
+    
     // Window management
     bool is_window_open() const;
     void close_window();
@@ -75,6 +79,9 @@ private:
     bool window_open_;
     
     ProgressUpdateCallback progress_callback_;
+    
+    // Progressive rendering coordination
+    std::atomic<bool> progressive_update_pending_{false};
     
 #ifdef USE_SDL
     SDL_Window* window_;

@@ -175,21 +175,13 @@ void ImageOutput::update_progressive_display(const std::vector<Color>& data, int
     bool significant_progress = (progress_percent - last_reported_progress) >= 0.05f; // 5% increments
     
     if (should_update_display || current_samples == target_samples || significant_progress) {
-        // Update display in real-time
-#ifdef USE_SDL
-        if (window_open_) {
-            update_window();
-            if (current_samples == target_samples || significant_progress) {
-                std::cout << "Progressive update: " << current_samples << "/" << target_samples 
-                          << " samples (" << int(100 * progress_percent) << "%)" << std::endl;
-            }
-        }
-#else
+        // Signal main thread that progressive update is ready
+        progressive_update_pending_ = true;
+        
         if (current_samples == target_samples || significant_progress) {
-            std::cout << "Progressive render update: " << current_samples << "/" << target_samples 
+            std::cout << "Progressive update: " << current_samples << "/" << target_samples 
                       << " samples (" << int(100 * progress_percent) << "%)" << std::endl;
         }
-#endif
         
         last_display_update = now;
         if (significant_progress) {
@@ -274,6 +266,16 @@ void ImageOutput::update_window() {
     SDL_RenderCopy(renderer_, texture_, nullptr, &dest_rect);
     
     SDL_RenderPresent(renderer_);
+#endif
+}
+
+void ImageOutput::process_pending_progressive_updates() {
+#ifdef USE_SDL
+    // Check if there's a pending progressive update and we have a window
+    if (progressive_update_pending_.load() && window_open_) {
+        update_window();
+        progressive_update_pending_ = false;
+    }
 #endif
 }
 

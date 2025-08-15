@@ -42,6 +42,11 @@ void UIManager::update() {
 }
 
 void UIManager::render() {
+    // Process any pending progressive display updates (must happen on main thread)
+    if (image_output_) {
+        image_output_->process_pending_progressive_updates();
+    }
+    
     // Display render controls
     render_status_display();
     render_start_button();
