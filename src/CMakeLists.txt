@@ -12,7 +12,7 @@ set(SOURCES
 
 # Add GPU compute sources if GPU acceleration is enabled
 if(USE_GPU)
-    list(APPEND SOURCES render/gpu_compute.cpp render/gpu_memory.cpp)
+    list(APPEND SOURCES render/gpu_compute.cpp render/gpu_memory.cpp render/gpu_rng.cpp)
 endif()
 
 add_executable(path_tracer_renderer ${SOURCES})

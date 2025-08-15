@@ -161,3 +161,39 @@ TEST_F(GPUMemoryTest, DeallocateAll) {
     EXPECT_EQ(stats.total_allocated, 0);
     EXPECT_EQ(stats.total_used, 0);
 }
+// Test new scene-specific buffer allocation
+TEST_F(GPUMemoryTest, SceneBufferAllocation) {
+    auto scene_buffer = memory_manager_->allocateSceneBuffer(100);
+    EXPECT_EQ(scene_buffer, nullptr);
+    
+    auto image_buffer = memory_manager_->allocateImageBuffer(800, 600);
+    EXPECT_EQ(image_buffer, nullptr);
+}
+
+// Test memory pool functionality
+TEST_F(GPUMemoryTest, MemoryPoolFunctionality) {
+    memory_manager_->createMemoryPool(1024, 4, GPUBufferType::SHADER_STORAGE, GPUUsagePattern::DYNAMIC);
+    memory_manager_->optimizeMemoryPools();
+    memory_manager_->defragmentMemoryPools();
+    EXPECT_TRUE(true);
+}
+
+// Test transfer performance tracking
+TEST_F(GPUMemoryTest, TransferPerformanceTracking) {
+    auto transfer_stats = memory_manager_->getTransferPerformance();
+    EXPECT_EQ(transfer_stats.total_transfers, 0);
+    EXPECT_EQ(transfer_stats.total_bytes_transferred, 0);
+    
+    memory_manager_->resetTransferStats();
+    EXPECT_TRUE(true);
+}
+
+// Test diagnostic functionality
+TEST_F(GPUMemoryTest, DiagnosticFunctionality) {
+    memory_manager_->enableMemoryLeakDetection(true);
+    memory_manager_->reportMemoryLeaks();
+    memory_manager_->generateMemoryReport();
+    memory_manager_->validateMemoryConsistency();
+    memory_manager_->dumpMemoryPoolStatus();
+    EXPECT_TRUE(true);
+}

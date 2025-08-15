@@ -15,13 +15,28 @@ echo ""
 print_usage() {
     echo "Usage: $0 [options]"
     echo ""
-    echo "Options:"
+    echo "Build Options:"
     echo "  -c, --clean          Clean build directory before building"
     echo "  -r, --release        Build in Release mode (default: Debug)"
-    echo "  -j, --jobs N         Number of parallel jobs for building"
+    echo "  -j, --jobs N         Number of parallel jobs for building (default: auto-detect)"
+    echo ""
+    echo "Windowing Options:"
     echo "  --use-glfw           Use GLFW instead of SDL for windowing"
     echo "  --no-windowing       Build without windowing support (console only)"
+    echo ""
+    echo "GPU Acceleration Options:"
+    echo "  --gpu                Enable GPU acceleration (requires OpenGL 4.3+)"
+    echo "  --no-gpu             Disable GPU acceleration (CPU-only build)"
+    echo "  --gpu-debug          Enable GPU debugging output"
+    echo ""
+    echo "Other Options:"
     echo "  -h, --help           Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0                   Build with default settings (Debug, auto-detect windowing, no GPU)"
+    echo "  $0 -r --gpu          Build Release with GPU acceleration"
+    echo "  $0 --clean --gpu     Clean build with GPU acceleration"
+    echo "  $0 --no-windowing    Build console-only version"
     echo ""
 }
 
@@ -30,6 +45,8 @@ BUILD_TYPE="Debug"
 NUM_JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo "4")
 USE_GLFW=false
 NO_WINDOWING=false
+USE_GPU=""
+GPU_DEBUG=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -51,6 +68,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-windowing)
             NO_WINDOWING=true
+            shift
+            ;;
+        --gpu)
+            USE_GPU="ON"
+            shift
+            ;;
+        --no-gpu)
+            USE_GPU="OFF"
+            shift
+            ;;
+        --gpu-debug)
+            GPU_DEBUG=true
             shift
             ;;
         -h|--help)
@@ -76,6 +105,7 @@ cd "$BUILD_DIR"
 echo "Configuring with CMake..."
 CMAKE_ARGS="-DCMAKE_BUILD_TYPE=$BUILD_TYPE"
 
+# Windowing configuration
 if [ "$NO_WINDOWING" = true ]; then
     CMAKE_ARGS="$CMAKE_ARGS -DUSE_SDL=OFF -DUSE_GLFW=OFF"
     echo "Building without windowing support (console only)"
@@ -87,6 +117,23 @@ else
     echo "Using SDL for windowing"
 fi
 
+# GPU acceleration configuration
+if [ -n "$USE_GPU" ]; then
+    CMAKE_ARGS="$CMAKE_ARGS -DUSE_GPU=$USE_GPU"
+    if [ "$USE_GPU" = "ON" ]; then
+        echo "GPU acceleration enabled (requires OpenGL 4.3+)"
+        if [ "$GPU_DEBUG" = true ]; then
+            CMAKE_ARGS="$CMAKE_ARGS -DGPU_DEBUG=ON"
+            echo "GPU debugging enabled"
+        fi
+    else
+        echo "GPU acceleration disabled (CPU-only build)"
+    fi
+else
+    echo "GPU acceleration auto-detect (based on OpenGL availability)"
+fi
+
+echo "CMake configuration: $CMAKE_ARGS"
 cmake $CMAKE_ARGS "$PROJECT_ROOT"
 
 echo ""

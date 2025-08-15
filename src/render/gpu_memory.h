@@ -21,11 +21,12 @@ struct GPUBuffer {
     void* mapped_pointer;
     std::string name;
     
-    GPUBuffer() 
+    GPUBuffer() {
 #ifdef USE_GPU
-        : id(0), target(0), usage(0)
+        id = 0; target = 0; usage = 0;
 #endif
-        , size(0), mapped(false), mapped_pointer(nullptr) {}
+        size = 0; mapped = false; mapped_pointer = nullptr;
+    }
 };
 
 enum class GPUBufferType {
@@ -75,11 +76,18 @@ public:
         const std::string& name = ""
     );
     
+    
+    // Scene-specific buffer allocation
+    std::shared_ptr<GPUBuffer> allocateSceneBuffer(size_t primitive_count);
+    std::shared_ptr<GPUBuffer> allocateImageBuffer(int width, int height);
     bool deallocateBuffer(std::shared_ptr<GPUBuffer> buffer);
     void deallocateAll();
     
     bool transferToGPU(std::shared_ptr<GPUBuffer> buffer, const void* data, size_t size, size_t offset = 0);
     bool transferFromGPU(std::shared_ptr<GPUBuffer> buffer, void* data, size_t size, size_t offset = 0);
+    
+    // Scene-specific transfers
+    bool transferSceneData(std::shared_ptr<GPUBuffer> buffer, const std::vector<float>& data);
     
     bool mapBuffer(std::shared_ptr<GPUBuffer> buffer, bool read_write = false);
     bool unmapBuffer(std::shared_ptr<GPUBuffer> buffer);

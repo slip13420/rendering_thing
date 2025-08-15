@@ -23,6 +23,22 @@ enum class RenderState {
     ERROR           // Render failed due to error
 };
 
+enum class RenderMode {
+    CPU_ONLY,
+    GPU_ONLY,
+    GPU_PREFERRED,
+    AUTO
+};
+
+struct RenderMetrics {
+    double cpuTime = 0.0;
+    double gpuTime = 0.0;
+    double speedupFactor = 0.0;
+    int samplesPerPixel = 0;
+    int imageWidth = 0;
+    int imageHeight = 0;
+};
+
 class RenderEngine {
 public:
     RenderEngine();

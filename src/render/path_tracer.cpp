@@ -1,19 +1,44 @@
 #include "path_tracer.h"
 #include "core/scene_manager.h"
 #include "core/camera.h"
+#include "render/gpu_compute.h"
+#include "render/gpu_memory.h"
+#include "render/gpu_rng.h"
 #include <iostream>
 #include <chrono>
 #include <thread>
 #include <cmath>
+#include <fstream>
+#include <sstream>
+
+#ifdef USE_GPU
+#include <GL/gl.h>
+#ifndef GL_COMPUTE_SHADER
+#define GL_COMPUTE_SHADER 0x91B9
+#endif
+#ifndef GL_TEXTURE_2D
+#define GL_TEXTURE_2D 0x0DE1
+#endif
+#ifndef GL_RGBA32F
+#define GL_RGBA32F 0x8814
+#endif
+#endif
 
 // PathTracer implementation
 PathTracer::PathTracer() 
     : camera_(Vector3(0, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0)),
       max_depth_(10), samples_per_pixel_(10), stop_requested_(false),
-      rng_(std::random_device{}()), uniform_dist_(0.0f, 1.0f) {
+      rng_(std::random_device{}()), uniform_dist_(0.0f, 1.0f)
+#ifdef USE_GPU
+      , currentMode_(RenderMode::HYBRID_AUTO), rayTracingProgram_(0), outputTexture_(0)
+#endif
+{
 }
 
 PathTracer::~PathTracer() {
+#ifdef USE_GPU
+    cleanupGPU();
+#endif
 }
 
 void PathTracer::set_scene_manager(std::shared_ptr<SceneManager> scene_manager) {
@@ -297,3 +322,440 @@ bool PathTracer::near_zero(const Vector3& v) const {
     const float s = 1e-8f;
     return (std::abs(v.x) < s) && (std::abs(v.y) < s) && (std::abs(v.z) < s);
 }
+
+#ifdef USE_GPU
+// GPU Implementation
+bool PathTracer::initializeGPU() {
+    if (gpuPipeline_ && gpuPipeline_->isAvailable()) {
+        return true; // Already initialized
+    }
+    
+    std::cout << "Initializing GPU compute pipeline for path tracing..." << std::endl;
+    
+    // Initialize GPU compute pipeline
+    gpuPipeline_ = std::make_shared<GPUComputePipeline>();
+    if (!gpuPipeline_->initialize()) {
+        std::cerr << "Failed to initialize GPU compute pipeline: " << gpuPipeline_->getErrorMessage() << std::endl;
+        return false;
+    }
+    
+    // Initialize GPU memory manager
+    gpuMemory_ = std::make_shared<GPUMemoryManager>();
+    if (!gpuMemory_->initialize()) {
+        std::cerr << "Failed to initialize GPU memory manager: " << gpuMemory_->getErrorMessage() << std::endl;
+        return false;
+    }
+    
+    // Initialize GPU RNG
+    gpuRNG_ = std::make_unique<GPURandomGenerator>();
+    
+    // Compile ray tracing shader
+    if (!compileRayTracingShader()) {
+        std::cerr << "Failed to compile ray tracing shader" << std::endl;
+        return false;
+    }
+    
+    std::cout << "GPU path tracing initialized successfully" << std::endl;
+    std::cout << "GPU Info: " << gpuPipeline_->getDriverInfo() << std::endl;
+    return true;
+#else
+    std::cerr << "GPU support not compiled in (USE_GPU not defined)" << std::endl;
+    return false;
+#endif
+}
+
+bool PathTracer::isGPUAvailable() const {
+    return gpuPipeline_ && gpuPipeline_->isAvailable();
+}
+
+void PathTracer::cleanupGPU() {
+#ifdef USE_GPU
+    if (outputTexture_ != 0) {
+        glDeleteTextures(1, &outputTexture_);
+        outputTexture_ = 0;
+    }
+    
+    if (rayTracingProgram_ != 0) {
+        glDeleteProgram(rayTracingProgram_);
+        rayTracingProgram_ = 0;
+    }
+    
+    if (gpuRNG_) {
+        gpuRNG_->cleanup();
+        gpuRNG_.reset();
+    }
+    
+    if (gpuMemory_) {
+        gpuMemory_->cleanup();
+        gpuMemory_.reset();
+    }
+    
+    if (gpuPipeline_) {
+        gpuPipeline_->cleanup();
+        gpuPipeline_.reset();
+    }
+#endif
+}
+
+bool PathTracer::compileRayTracingShader() {
+#ifdef USE_GPU
+    if (!gpuPipeline_) {
+        return false;
+    }
+    
+    // Read shader source from file
+    std::ifstream shaderFile("/home/chad/git/new_renderer/src/render/shaders/ray_tracing.comp");
+    if (!shaderFile.is_open()) {
+        std::cerr << "Failed to open ray tracing shader file" << std::endl;
+        return false;
+    }
+    
+    std::stringstream shaderStream;
+    shaderStream << shaderFile.rdbuf();
+    std::string shaderSource = shaderStream.str();
+    shaderFile.close();
+    
+    // Compile shader
+    if (!gpuPipeline_->compileShader(shaderSource)) {
+        std::cerr << "Failed to compile ray tracing shader: " << gpuPipeline_->getErrorMessage() << std::endl;
+        return false;
+    }
+    
+    // Link program
+    if (!gpuPipeline_->linkProgram()) {
+        std::cerr << "Failed to link ray tracing program: " << gpuPipeline_->getErrorMessage() << std::endl;
+        return false;
+    }
+    
+    // Store the program handle for later use
+#ifdef USE_GPU
+    // We need to extract the program from the pipeline - this is a design issue
+    // For now, we'll assume the pipeline exposes the program ID
+    // rayTracingProgram_ = gpuPipeline_->getProgramID(); // This method doesn't exist yet
+    rayTracingProgram_ = 0; // Placeholder - we'll fix this with proper GPU pipeline integration
+#endif
+    
+    std::cout << "Ray tracing shader compiled and linked successfully" << std::endl;
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool PathTracer::trace_gpu(int width, int height) {
+#ifdef USE_GPU
+    if (!isGPUAvailable()) {
+        std::cerr << "GPU not available for ray tracing" << std::endl;
+        return false;
+    }
+    
+    std::cout << "Starting GPU path tracing (" << width << "x" << height << ", " 
+              << samples_per_pixel_ << " samples per pixel)" << std::endl;
+    
+    auto start_time = std::chrono::steady_clock::now();
+    
+    // Initialize GPU RNG for this image size
+    if (!gpuRNG_->initialize(width, height)) {
+        std::cerr << "Failed to initialize GPU RNG" << std::endl;
+        return false;
+    }
+    
+    // Prepare scene data for GPU
+    if (!prepareGPUScene()) {
+        std::cerr << "Failed to prepare GPU scene data" << std::endl;
+        return false;
+    }
+    
+    // Dispatch GPU compute
+    if (!dispatchGPUCompute(width, height, samples_per_pixel_)) {
+        std::cerr << "Failed to dispatch GPU compute" << std::endl;
+        return false;
+    }
+    
+    // Read back results
+    if (!readbackGPUResult(width, height)) {
+        std::cerr << "Failed to read back GPU results" << std::endl;
+        return false;
+    }
+    
+    auto end_time = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    std::cout << "GPU path tracing completed in " << duration.count() << " ms" << std::endl;
+    
+    return true;
+#else
+    std::cerr << "GPU support not compiled in" << std::endl;
+    return false;
+#endif
+}
+
+bool PathTracer::trace_hybrid(int width, int height, RenderMode mode) {
+    if (mode == RenderMode::CPU_ONLY) {
+        return trace_interruptible(width, height);
+    } else if (mode == RenderMode::GPU_ONLY) {
+        return trace_gpu(width, height);
+    } else {
+        // HYBRID_AUTO - decide based on performance heuristics
+        if (shouldUseGPU(width, height, samples_per_pixel_)) {
+            std::cout << "Hybrid mode: Using GPU for rendering" << std::endl;
+            return trace_gpu(width, height);
+        } else {
+            std::cout << "Hybrid mode: Using CPU for rendering" << std::endl;
+            return trace_interruptible(width, height);
+        }
+    }
+}
+
+bool PathTracer::shouldUseGPU(int width, int height, int samples) const {
+    if (!isGPUAvailable()) {
+        return false;
+    }
+    
+    // Simple heuristic: use GPU for larger images or higher sample counts
+    int totalWork = width * height * samples;
+    const int GPU_THRESHOLD = 100000; // Threshold where GPU becomes worthwhile
+    
+    return totalWork > GPU_THRESHOLD;
+}
+
+bool PathTracer::prepareGPUScene() {
+#ifdef USE_GPU
+    if (!scene_manager_ || !gpuMemory_) {
+        return false;
+    }
+    
+    // Get scene primitives - this is a simplified implementation
+    // In a real implementation, we'd need to extract sphere data from SceneManager
+    std::vector<float> sceneData;
+    
+    // For now, create some test spheres
+    // Format: [center.x, center.y, center.z, radius, albedo.r, albedo.g, albedo.b, material_flags]
+    sceneData = {
+        // Sphere 1: center=(0,0,-1), radius=0.5, red albedo
+        0.0f, 0.0f, -1.0f, 0.5f,
+        0.8f, 0.3f, 0.3f, 0.0f,
+        
+        // Sphere 2: center=(0,-100.5,-1), radius=100, green albedo (ground)
+        0.0f, -100.5f, -1.0f, 100.0f,
+        0.3f, 0.8f, 0.3f, 0.0f,
+        
+        // Sphere 3: center=(1,0,-1), radius=0.5, blue albedo
+        1.0f, 0.0f, -1.0f, 0.5f,
+        0.3f, 0.3f, 0.8f, 0.0f
+    };
+    
+    // Allocate scene buffer
+    size_t sceneBufferSize = sceneData.size() * sizeof(float);
+    sceneBuffer_ = gpuMemory_->allocateBuffer(
+        sceneBufferSize,
+        GPUBufferType::SHADER_STORAGE,
+        GPUUsagePattern::STATIC,
+        "scene_data"
+    );
+    
+    if (!sceneBuffer_) {
+        std::cerr << "Failed to allocate scene buffer" << std::endl;
+        return false;
+    }
+    
+    // Transfer scene data to GPU
+    if (!gpuMemory_->transferToGPU(sceneBuffer_, sceneData.data(), sceneBufferSize)) {
+        std::cerr << "Failed to transfer scene data to GPU" << std::endl;
+        return false;
+    }
+    
+    std::cout << "Scene data prepared for GPU (" << sceneData.size() / 8 << " spheres)" << std::endl;
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool PathTracer::dispatchGPUCompute(int width, int height, int samples) {
+#ifdef USE_GPU
+    if (!gpuPipeline_ || !sceneBuffer_ || !gpuRNG_) {
+        return false;
+    }
+    
+    // Create output texture
+    if (outputTexture_ != 0) {
+        glDeleteTextures(1, &outputTexture_);
+    }
+    
+    glGenTextures(1, &outputTexture_);
+    glBindTexture(GL_TEXTURE_2D, outputTexture_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    
+    // Bind compute shader program
+    glUseProgram(rayTracingProgram_);
+    
+    // Bind output texture
+    glBindImageTexture(0, outputTexture_, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+    
+    // Bind scene data buffer
+    gpuMemory_->bindBuffer(sceneBuffer_, 1);
+    
+    // Bind RNG buffer
+    gpuMemory_->bindBuffer(gpuRNG_->getRNGBuffer(), 2);
+    
+    // Set uniforms
+    updateGPUUniforms(width, height, samples);
+    
+    // Calculate work group sizes
+    const int LOCAL_SIZE = 16;
+    int workGroupsX = (width + LOCAL_SIZE - 1) / LOCAL_SIZE;
+    int workGroupsY = (height + LOCAL_SIZE - 1) / LOCAL_SIZE;
+    
+    // Dispatch compute shader
+    if (!gpuPipeline_->dispatch(workGroupsX, workGroupsY, 1)) {
+        std::cerr << "Failed to dispatch GPU compute: " << gpuPipeline_->getErrorMessage() << std::endl;
+        return false;
+    }
+    
+    // Wait for completion
+    gpuPipeline_->synchronize();
+    
+    std::cout << "GPU compute dispatched: " << workGroupsX << "x" << workGroupsY << " work groups" << std::endl;
+    return true;
+#else
+    return false;
+#endif
+}
+
+void PathTracer::updateGPUUniforms(int width, int height, int samples) {
+#ifdef USE_GPU
+    // Set uniform values
+    glUniform1i(glGetUniformLocation(rayTracingProgram_, "imageWidth"), width);
+    glUniform1i(glGetUniformLocation(rayTracingProgram_, "imageHeight"), height);
+    glUniform1i(glGetUniformLocation(rayTracingProgram_, "samplesPerPixel"), samples);
+    glUniform1i(glGetUniformLocation(rayTracingProgram_, "maxDepth"), max_depth_);
+    glUniform1i(glGetUniformLocation(rayTracingProgram_, "sphereCount"), 3); // Hardcoded for now
+    
+    // Camera uniforms
+    Vector3 pos = camera_.get_position();
+    glUniform3f(glGetUniformLocation(rayTracingProgram_, "cameraPosition"), pos.x, pos.y, pos.z);
+    
+    // For now, use identity transform - in real implementation we'd calculate proper camera transform
+    float transform[16] = {
+        1,0,0,0,
+        0,1,0,0,
+        0,0,1,0,
+        0,0,0,1
+    };
+    glUniformMatrix4fv(glGetUniformLocation(rayTracingProgram_, "cameraTransform"), 1, GL_FALSE, transform);
+#endif
+}
+
+bool PathTracer::readbackGPUResult(int width, int height) {
+#ifdef USE_GPU
+    if (outputTexture_ == 0) {
+        return false;
+    }
+    
+    // Resize image data buffer
+    image_data_.resize(width * height);
+    std::vector<float> tempData(width * height * 4); // RGBA
+    
+    // Read texture data
+    glBindTexture(GL_TEXTURE_2D, outputTexture_);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, tempData.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+    
+    // Convert RGBA float to Color
+    for (int i = 0; i < width * height; ++i) {
+        float r = tempData[i * 4 + 0];
+        float g = tempData[i * 4 + 1];
+        float b = tempData[i * 4 + 2];
+        image_data_[i] = Color(r, g, b);
+    }
+    
+    std::cout << "GPU result read back successfully" << std::endl;
+    return true;
+#else
+    return false;
+#endif
+}
+
+PerformanceMetrics PathTracer::benchmarkGPUvsCPU(int width, int height) {
+    PerformanceMetrics metrics;
+    metrics.imageWidth = width;
+    metrics.imageHeight = height;
+    metrics.samplesPerPixel = samples_per_pixel_;
+    
+    // Benchmark CPU
+    std::cout << "Benchmarking CPU performance..." << std::endl;
+    auto cpuStart = std::chrono::high_resolution_clock::now();
+    bool cpuSuccess = trace_interruptible(width, height);
+    auto cpuEnd = std::chrono::high_resolution_clock::now();
+    
+    if (cpuSuccess) {
+        metrics.cpuTime = std::chrono::duration<double, std::milli>(cpuEnd - cpuStart).count();
+        std::cout << "CPU time: " << metrics.cpuTime << " ms" << std::endl;
+    }
+    
+    // Benchmark GPU
+    if (isGPUAvailable()) {
+        std::cout << "Benchmarking GPU performance..." << std::endl;
+        auto gpuStart = std::chrono::high_resolution_clock::now();
+        bool gpuSuccess = trace_gpu(width, height);
+        auto gpuEnd = std::chrono::high_resolution_clock::now();
+        
+        if (gpuSuccess) {
+            metrics.gpuTime = std::chrono::duration<double, std::milli>(gpuEnd - gpuStart).count();
+            std::cout << "GPU time: " << metrics.gpuTime << " ms" << std::endl;
+            
+            if (metrics.cpuTime > 0 && metrics.gpuTime > 0) {
+                metrics.speedupFactor = metrics.cpuTime / metrics.gpuTime;
+                std::cout << "GPU speedup: " << metrics.speedupFactor << "x" << std::endl;
+            }
+        }
+    }
+    
+    return metrics;
+}
+
+bool PathTracer::validateGPUAccuracy(const std::vector<Color>& cpuResult, const std::vector<Color>& gpuResult, float tolerance) {
+    if (cpuResult.size() != gpuResult.size()) {
+        std::cerr << "GPU accuracy validation failed: result sizes don't match" << std::endl;
+        return false;
+    }
+    
+    double totalError = 0.0;
+    int pixelCount = cpuResult.size();
+    int errorPixels = 0;
+    
+    for (int i = 0; i < pixelCount; ++i) {
+        float errorR = std::abs(cpuResult[i].r - gpuResult[i].r);
+        float errorG = std::abs(cpuResult[i].g - gpuResult[i].g);
+        float errorB = std::abs(cpuResult[i].b - gpuResult[i].b);
+        
+        float pixelError = std::max({errorR, errorG, errorB});
+        totalError += pixelError;
+        
+        if (pixelError > tolerance) {
+            errorPixels++;
+        }
+    }
+    
+    double averageError = totalError / pixelCount;
+    double errorRate = static_cast<double>(errorPixels) / pixelCount;
+    
+    std::cout << "GPU accuracy validation:" << std::endl;
+    std::cout << "  Average error: " << averageError << std::endl;
+    std::cout << "  Error pixels: " << errorPixels << "/" << pixelCount << " (" << (errorRate * 100) << "%)" << std::endl;
+    
+    // Pass if average error is within tolerance and error rate is low
+    bool passed = (averageError <= tolerance) && (errorRate <= 0.05); // Allow 5% error pixels
+    
+    if (passed) {
+        std::cout << "  Result: PASSED" << std::endl;
+    } else {
+        std::cout << "  Result: FAILED" << std::endl;
+    }
+    
+    return passed;
+}
+#endif

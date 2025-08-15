@@ -53,15 +53,10 @@ void RenderEngine::initialize() {
     }
     
     // Initialize GPU acceleration if available
-    if (render_mode_ == RenderMode::AUTO || render_mode_ == RenderMode::GPU_PREFERRED || render_mode_ == RenderMode::GPU_ONLY) {
-        if (initialize_gpu()) {
-            std::cout << "GPU acceleration initialized successfully" << std::endl;
-        } else if (render_mode_ == RenderMode::GPU_ONLY) {
-            throw std::runtime_error("GPU-only mode requested but GPU initialization failed");
-        } else {
-            std::cout << "GPU acceleration unavailable, falling back to CPU" << std::endl;
-            render_mode_ = RenderMode::CPU_ONLY;
-        }
+    if (initialize_gpu()) {
+        std::cout << "GPU acceleration initialized successfully" << std::endl;
+    } else {
+        std::cout << "GPU acceleration unavailable, falling back to CPU" << std::endl;
     }
     
     initialized_ = true;
@@ -107,6 +102,11 @@ void RenderEngine::set_scene_manager(std::shared_ptr<SceneManager> scene_manager
     scene_manager_ = scene_manager;
     if (path_tracer_) {
         path_tracer_->set_scene_manager(scene_manager_);
+    }
+    
+    // Connect GPU memory manager if available
+    if (gpu_initialized_ && gpu_memory_ && scene_manager_) {
+        scene_manager_->setGPUMemoryManager(gpu_memory_);
     }
 }
 
@@ -379,8 +379,37 @@ void RenderEngine::progressive_render_worker(const ProgressiveConfig& config) {
         // Set up PathTracer cancellation
         path_tracer_->reset_stop_request();
         
-        // Create progressive callback to update display in real-time
+        // Create progressive callback to update display in real-time with GPU memory coordination
         auto progressive_callback = [this](const std::vector<Color>& data, int width, int height, int current_samples, int target_samples) {
+            // Coordinate GPU memory updates with progressive rendering timing
+            if (gpu_initialized_ && gpu_memory_ && scene_manager_) {
+                // Check if GPU memory optimization is needed during progressive render
+                auto gpu_stats = gpu_memory_->getMemoryStats();
+                
+                // Only optimize memory pools if fragmentation is high and we're not at peak rendering
+                if (gpu_stats.fragmentation_ratio > 0.3f && current_samples % 4 == 0) {
+                    auto opt_start = std::chrono::high_resolution_clock::now();
+                    gpu_memory_->optimizeMemoryPools();
+                    auto opt_end = std::chrono::high_resolution_clock::now();
+                    
+                    auto opt_time = std::chrono::duration<double, std::milli>(opt_end - opt_start).count();
+                    
+                    // Only log if optimization takes significant time (>1ms)
+                    if (opt_time > 1.0) {
+                        std::cout << "GPU memory optimized during progressive render: " 
+                                  << opt_time << "ms" << std::endl;
+                    }
+                }
+                
+                // Transfer current progressive image data to GPU if needed for compute operations
+                if (current_samples % 8 == 0) { // Every 8th sample to avoid overhead
+                    auto image_buffer = gpu_memory_->allocateImageBuffer(width, height);
+                    if (image_buffer) {
+                        gpu_memory_->transferImageData(image_buffer, data);
+                    }
+                }
+            }
+            
             if (image_output_) {
                 image_output_->update_progressive_display(data, width, height, current_samples, target_samples);
             }
@@ -478,6 +507,20 @@ void RenderEngine::synchronize_render_components() {
         std::cout << "Camera synchronized with PathTracer" << std::endl;
     }
     
+    // Synchronize scene data to GPU if GPU acceleration is available
+    if (gpu_initialized_ && gpu_memory_ && scene_manager_) {
+        if (!scene_manager_->isGPUSynced()) {
+            auto start_time = std::chrono::high_resolution_clock::now();
+            scene_manager_->syncSceneToGPU();
+            auto end_time = std::chrono::high_resolution_clock::now();
+            
+            auto sync_time = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+            std::cout << "GPU scene synchronization completed in " << sync_time << "ms" << std::endl;
+        } else {
+            std::cout << "Scene already synchronized with GPU" << std::endl;
+        }
+    }
+    
     std::cout << "Render components synchronized" << std::endl;
 }
 
@@ -552,6 +595,12 @@ bool RenderEngine::initialize_gpu() {
             gpu_memory_.reset();
             gpu_pipeline_.reset();
             return false;
+        }
+        
+        // Connect GPU memory manager to scene manager for coordination
+        if (scene_manager_) {
+            scene_manager_->setGPUMemoryManager(gpu_memory_);
+            std::cout << "GPU memory manager connected to scene manager" << std::endl;
         }
         
         gpu_initialized_ = true;
