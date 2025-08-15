@@ -25,6 +25,7 @@ message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
 
 option(USE_SDL "Use SDL for windowing (default: ON)" ON)
 option(USE_GLFW "Use GLFW for windowing (default: OFF)" OFF)
+option(USE_GPU "Enable GPU acceleration with compute shaders (default: ON)" ON)
 
 if(USE_SDL AND USE_GLFW)
     message(FATAL_ERROR "Cannot use both SDL and GLFW. Please choose one.")
@@ -34,10 +35,29 @@ if(NOT USE_SDL AND NOT USE_GLFW)
     message(STATUS "No windowing library selected - building console-only version")
 endif()
 
+if(USE_GPU)
+    message(STATUS "GPU acceleration enabled")
+else()
+    message(STATUS "GPU acceleration disabled - CPU-only build")
+endif()
+
 find_package(Threads REQUIRED)
 
 # Include automatic dependency management
 include(dependencies)
+
+# GPU acceleration setup
+if(USE_GPU)
+    find_package(OpenGL REQUIRED)
+    if(OpenGL_FOUND)
+        message(STATUS "OpenGL found: ${OPENGL_LIBRARIES}")
+        set(GPU_LIBS ${OPENGL_LIBRARIES})
+        add_compile_definitions(USE_GPU)
+    else()
+        message(WARNING "OpenGL not found - GPU acceleration will be disabled")
+        set(USE_GPU OFF)
+    endif()
+endif()
 
 # Configure windowing libraries after dependencies are resolved
 if(USE_SDL)
@@ -50,6 +70,12 @@ if(USE_GLFW)
     message(STATUS "Using GLFW for windowing")
     set(WINDOWING_LIBS glfw)
     add_compile_definitions(USE_GLFW)
+endif()
+
+# Combine all libraries for passing to subdirectories
+set(ALL_LIBS ${WINDOWING_LIBS} ${GPU_LIBS})
+if(GPU_LIBS)
+    message(STATUS "GPU libraries configured: ${GPU_LIBS}")
 endif()
 
 add_subdirectory(src)

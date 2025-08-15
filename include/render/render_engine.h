@@ -10,6 +10,8 @@
 class PathTracer;
 class SceneManager;
 class ImageOutput;
+class GPUComputePipeline;
+class GPUMemoryManager;
 struct ProgressiveConfig;
 
 // Render states for background rendering
@@ -58,6 +60,14 @@ public:
     // Camera preview support
     void update_camera_preview(const Vector3& camera_pos, const Vector3& camera_target);
     
+    // GPU acceleration
+    void set_render_mode(RenderMode mode);
+    RenderMode get_render_mode() const;
+    bool is_gpu_available() const;
+    bool initialize_gpu();
+    void cleanup_gpu();
+    RenderMetrics get_render_metrics() const;
+    
 private:
     void render_worker();
     void progressive_render_worker(const ProgressiveConfig& config);
@@ -77,6 +87,12 @@ private:
     std::shared_ptr<SceneManager> scene_manager_;
     std::shared_ptr<ImageOutput> image_output_;
     
+    // GPU components (conditionally compiled)
+#ifdef USE_GPU
+    std::shared_ptr<GPUComputePipeline> gpu_pipeline_;
+    std::shared_ptr<GPUMemoryManager> gpu_memory_;
+#endif
+    
     // Threading and state management
     std::thread render_thread_;
     std::atomic<RenderState> render_state_;
@@ -84,4 +100,9 @@ private:
     std::atomic<bool> progressive_mode_;
     std::function<void(RenderState)> state_change_callback_;
     std::function<void(int, int, int, int)> progress_callback_;
+    
+    // GPU acceleration state
+    RenderMode render_mode_;
+    bool gpu_initialized_;
+    RenderMetrics last_metrics_;
 };

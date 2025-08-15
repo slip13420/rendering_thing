@@ -10,6 +10,11 @@ set(SOURCES
     render/image_output.cpp
 )
 
+# Add GPU compute sources if GPU acceleration is enabled
+if(USE_GPU)
+    list(APPEND SOURCES render/gpu_compute.cpp render/gpu_memory.cpp)
+endif()
+
 add_executable(path_tracer_renderer ${SOURCES})
 
 # Compiler-specific warning and optimization flags
@@ -44,6 +49,11 @@ target_link_libraries(path_tracer_renderer PRIVATE
 
 if(WINDOWING_LIBS)
     target_link_libraries(path_tracer_renderer PRIVATE ${WINDOWING_LIBS})
+endif()
+
+# Link GPU libraries if GPU acceleration is enabled
+if(USE_GPU AND GPU_LIBS)
+    target_link_libraries(path_tracer_renderer PRIVATE ${GPU_LIBS})
 endif()
 
 if(WIN32)

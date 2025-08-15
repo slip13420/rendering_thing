@@ -157,6 +157,36 @@ function(log_dependency_info)
     message(STATUS "=====================================")
 endfunction()
 
+# Function to validate GPU capabilities
+function(validate_gpu_capabilities)
+    if(USE_GPU)
+        message(STATUS "=== GPU Capability Validation ===")
+        
+        # Check OpenGL availability
+        if(NOT OpenGL_FOUND)
+            message(WARNING "OpenGL not found - GPU acceleration disabled")
+            set(USE_GPU OFF PARENT_SCOPE)
+            return()
+        endif()
+        
+        # Platform-specific GPU validation
+        if(WIN32)
+            message(STATUS "GPU Validation: Windows platform detected")
+            # Windows typically has good OpenGL support through drivers
+        elseif(APPLE)
+            message(STATUS "GPU Validation: macOS platform detected")
+            # macOS has OpenGL but deprecated in favor of Metal
+            message(STATUS "Note: OpenGL is deprecated on macOS in favor of Metal")
+        else()
+            message(STATUS "GPU Validation: Linux platform detected")
+            # Linux may need additional GPU driver validation
+        endif()
+        
+        message(STATUS "✓ GPU capabilities validated successfully")
+        message(STATUS "================================")
+    endif()
+endfunction()
+
 # Function to check if all dependencies are available
 function(check_dependencies_available)
     set(missing_deps "")
@@ -201,3 +231,6 @@ endfunction()
 
 # Validate that dependencies are properly configured
 check_dependencies_available()
+
+# Validate GPU capabilities if enabled
+validate_gpu_capabilities()

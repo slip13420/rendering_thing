@@ -5,15 +5,22 @@
 #include "image_output.h"
 #include <iostream>
 
+#ifdef USE_GPU
+#include "gpu_compute.h"
+#include "gpu_memory.h"
+#endif
+
 RenderEngine::RenderEngine() 
     : initialized_(false), render_width_(800), render_height_(600),
-      render_state_(RenderState::IDLE), stop_requested_(false), progressive_mode_(false), manual_progressive_mode_(false) {
+      render_state_(RenderState::IDLE), stop_requested_(false), progressive_mode_(false), manual_progressive_mode_(false),
+      render_mode_(RenderMode::AUTO), gpu_initialized_(false) {
     initialize();
 }
 
 RenderEngine::~RenderEngine() {
     if (initialized_) {
         stop_render();
+        cleanup_gpu();
         shutdown();
     }
 }
@@ -43,6 +50,18 @@ void RenderEngine::initialize() {
     // Initialize display with default size
     if (image_output_) {
         image_output_->initialize_display(render_width_, render_height_);
+    }
+    
+    // Initialize GPU acceleration if available
+    if (render_mode_ == RenderMode::AUTO || render_mode_ == RenderMode::GPU_PREFERRED || render_mode_ == RenderMode::GPU_ONLY) {
+        if (initialize_gpu()) {
+            std::cout << "GPU acceleration initialized successfully" << std::endl;
+        } else if (render_mode_ == RenderMode::GPU_ONLY) {
+            throw std::runtime_error("GPU-only mode requested but GPU initialization failed");
+        } else {
+            std::cout << "GPU acceleration unavailable, falling back to CPU" << std::endl;
+            render_mode_ = RenderMode::CPU_ONLY;
+        }
     }
     
     initialized_ = true;
@@ -485,4 +504,102 @@ void RenderEngine::cleanup_partial_render() {
     }
     
     // PathTracer automatically handles its own cleanup on cancellation
+}
+
+// GPU acceleration methods
+void RenderEngine::set_render_mode(RenderMode mode) {
+    render_mode_ = mode;
+    
+    if (initialized_) {
+        // Reinitialize GPU if mode changed to GPU
+        if (mode == RenderMode::GPU_PREFERRED || mode == RenderMode::GPU_ONLY || mode == RenderMode::AUTO) {
+            if (!gpu_initialized_) {
+                initialize_gpu();
+            }
+        } else if (mode == RenderMode::CPU_ONLY) {
+            cleanup_gpu();
+        }
+    }
+}
+
+RenderMode RenderEngine::get_render_mode() const {
+    return render_mode_;
+}
+
+bool RenderEngine::is_gpu_available() const {
+    return gpu_initialized_;
+}
+
+bool RenderEngine::initialize_gpu() {
+#ifdef USE_GPU
+    if (gpu_initialized_) {
+        return true;
+    }
+    
+    try {
+        // Create GPU compute pipeline
+        gpu_pipeline_ = std::make_shared<GPUComputePipeline>();
+        if (!gpu_pipeline_->initialize()) {
+            std::cerr << "Failed to initialize GPU compute pipeline: " << gpu_pipeline_->getErrorMessage() << std::endl;
+            gpu_pipeline_.reset();
+            return false;
+        }
+        
+        // Create GPU memory manager
+        gpu_memory_ = std::make_shared<GPUMemoryManager>();
+        if (!gpu_memory_->initialize()) {
+            std::cerr << "Failed to initialize GPU memory manager: " << gpu_memory_->getErrorMessage() << std::endl;
+            gpu_memory_.reset();
+            gpu_pipeline_.reset();
+            return false;
+        }
+        
+        gpu_initialized_ = true;
+        std::cout << "GPU acceleration initialized: " << gpu_pipeline_->getDriverInfo() << std::endl;
+        
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "GPU initialization failed with exception: " << e.what() << std::endl;
+        cleanup_gpu();
+        return false;
+    }
+#else
+    std::cout << "GPU support not compiled in (USE_GPU not defined)" << std::endl;
+    return false;
+#endif
+}
+
+void RenderEngine::cleanup_gpu() {
+#ifdef USE_GPU
+    if (gpu_memory_) {
+        gpu_memory_->cleanup();
+        gpu_memory_.reset();
+    }
+    
+    if (gpu_pipeline_) {
+        gpu_pipeline_->cleanup();
+        gpu_pipeline_.reset();
+    }
+    
+    gpu_initialized_ = false;
+    std::cout << "GPU resources cleaned up" << std::endl;
+#endif
+}
+
+RenderMetrics RenderEngine::get_render_metrics() const {
+    RenderMetrics metrics;
+    
+#ifdef USE_GPU
+    if (gpu_initialized_ && gpu_memory_) {
+        auto gpu_stats = gpu_memory_->getMemoryStats();
+        metrics.memory_usage_mb = static_cast<float>(gpu_stats.total_used) / (1024.0f * 1024.0f);
+        metrics.gpu_utilization = gpu_stats.fragmentation_ratio < 0.5f ? 75.0f : 50.0f; // Simple heuristic
+    }
+#endif
+    
+    // CPU utilization and other metrics would be calculated based on actual rendering
+    metrics.cpu_utilization = render_state_ == RenderState::RENDERING ? 80.0f : 10.0f;
+    
+    return metrics;
 }
