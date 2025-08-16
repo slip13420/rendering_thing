@@ -33,6 +33,8 @@ void UIInput::processEvents() {
             quit_requested_ = true;
         } else if (event.type == SDL_KEYDOWN) {
             handle_realtime_camera_input(event.key.keysym.sym);
+        } else if (event.type == SDL_KEYUP) {
+            handle_camera_key_release(event.key.keysym.sym);
         } else if (event.type == SDL_MOUSEBUTTONDOWN) {
             if (event.button.button == SDL_BUTTON_RIGHT) {
                 mouse_captured_ = true;
@@ -207,6 +209,7 @@ void UIInput::handle_realtime_camera_input(int keycode) {
 #ifdef USE_SDL
     Vector3 current_pos = get_camera_position();
     bool moved = false;
+    bool is_camera_key = false;
     
     // Calculate camera-relative movement vectors
     Vector3 forward, right, up;
@@ -218,26 +221,32 @@ void UIInput::handle_realtime_camera_input(int keycode) {
         case SDLK_w:
             new_pos = current_pos + forward * camera_move_speed_;
             moved = true;
+            is_camera_key = true;
             break;
         case SDLK_s:
             new_pos = current_pos - forward * camera_move_speed_;
             moved = true;
+            is_camera_key = true;
             break;
         case SDLK_a:
             new_pos = current_pos - right * camera_move_speed_;
             moved = true;
+            is_camera_key = true;
             break;
         case SDLK_d:
             new_pos = current_pos + right * camera_move_speed_;
             moved = true;
+            is_camera_key = true;
             break;
         case SDLK_r:
             new_pos = current_pos + up * camera_move_speed_;
             moved = true;
+            is_camera_key = true;
             break;
         case SDLK_f:
             new_pos = current_pos - up * camera_move_speed_;
             moved = true;
+            is_camera_key = true;
             break;
         case SDLK_q:
         case SDLK_ESCAPE:
@@ -292,13 +301,13 @@ void UIInput::handle_realtime_camera_input(int keycode) {
             if (render_engine_) {
                 ProgressiveConfig config;
                 config.initialSamples = 1;
-                config.targetSamples = 100;  // Reduced for faster GPU progressive
-                config.progressiveSteps = 8;  // Fewer steps for GPU efficiency
+                config.targetSamples = 2000;  // High quality GPU progressive rendering
+                config.progressiveSteps = 12;  // More steps for gradual quality improvement
                 config.updateInterval = 0.3f;
                 
                 // Try GPU progressive rendering first
                 if (render_engine_->is_gpu_available()) {
-                    std::cout << "Attempting GPU progressive rendering (1->100 samples, 8 steps)..." << std::endl;
+                    std::cout << "Attempting GPU progressive rendering (1->2000 samples, 12 steps)..." << std::endl;
                     bool success = render_engine_->start_progressive_gpu_main_thread(config);
                     if (success) {
                         std::cout << "GPU progressive rendering completed successfully!" << std::endl;
@@ -339,6 +348,11 @@ void UIInput::handle_realtime_camera_input(int keycode) {
             break;
     }
     
+    // Track camera key presses for movement detection
+    if (is_camera_key) {
+        pressed_camera_keys_.insert(keycode);
+    }
+    
     if (moved) {
         set_camera_position(new_pos);
         update_camera_target(); // Update target to maintain current view direction
@@ -355,7 +369,7 @@ void UIInput::handle_mouse_look(int delta_x, int delta_y) {
 #ifdef USE_SDL
     // Update camera rotation angles using relative mouse movement
     camera_yaw_ += delta_x * mouse_sensitivity_;   // Fixed: move right = look right
-    camera_pitch_ += delta_y * mouse_sensitivity_; // Up/down as set previously
+    camera_pitch_ -= delta_y * mouse_sensitivity_; // Fixed: mouse up = look up (negative pitch)
     
     // Clamp pitch to prevent camera flipping
     const float max_pitch = 1.5f; // ~85 degrees
@@ -425,9 +439,28 @@ void UIInput::print_camera_controls() const {
     std::cout << "\n=== RENDER CONTROLS ===" << std::endl;
     std::cout << "G   - Start standard rendering" << std::endl;
     std::cout << "U   - GPU rendering in main thread (test)" << std::endl;
-    std::cout << "M   - Start progressive rendering (1->1000 samples)" << std::endl;
+    std::cout << "M   - Start progressive rendering (1->2000 samples)" << std::endl;
     std::cout << "T   - Stop/cancel rendering" << std::endl;
     std::cout << "V   - Save rendered image (after completion)" << std::endl;
     std::cout << "\nCamera moves independently - use G to render from current position!" << std::endl;
     std::cout << "==================================" << std::endl;
+}
+
+void UIInput::handle_camera_key_release(int keycode) {
+#ifdef USE_SDL
+    // Check if this is a camera movement key
+    bool is_camera_key = (keycode == SDLK_w || keycode == SDLK_s || 
+                         keycode == SDLK_a || keycode == SDLK_d || 
+                         keycode == SDLK_r || keycode == SDLK_f);
+    
+    if (is_camera_key) {
+        // Remove from pressed keys set
+        pressed_camera_keys_.erase(keycode);
+        
+        // If no camera keys are pressed, signal camera movement stopped
+        if (pressed_camera_keys_.empty() && render_engine_) {
+            render_engine_->stop_camera_movement();
+        }
+    }
+#endif
 }

@@ -1,9 +1,39 @@
 # TODO
 
-* ✅ Progressive rendering stops at 51% - FIXED (race condition in camera preview logic)
-* ✅ update draw only happens with mouse movement - FIXED (moved display updates to main thread)
-* ✅ Raise max samples - FIXED (M key: 100→1000 samples, defaults: 1000→2000 samples)
-* ✅ Save functionality issues - FIXED (can save COMPLETED or STOPPED renders, improved error feedback, preserve partial renders)
 * output save is not a png when png chosen (maybe just file extension)
-* Ghosting issue
-* Camera control is jank (up Down are reversed for example and it's twitchy)
+* mouse just keeps moving, it's not 1to 1 it's almost like it's buffered
+* next story is 2.5.4 then 3.1 and 3.2
+* shader switching on primitives?
+* need to be way less verbose and remove all debug prints, specifically...
+[Stop Render Button: DISABLED]
+[Save Button: DISABLED]
+[Progressive Rendering: INACTIVE]
+  Available: Start Progressive Render
+[Render Status: Ready to render]
+[Start Render Button: ENABLED]
+  Click to start rendering
+[Stop Render Button: DISABLED]
+[Save Button: DISABLED]
+[Progressive Rendering: INACTIVE]
+  Available: Start Progressive Render
+[Render Status: Ready to render]
+[Start Render Button: ENABLED]
+  Click to start rendering
+[Stop Render Button: DISABLED]
+[Save Button: DISABLED]
+[Progressive Rendering: INACTIVE]
+  Available: Start Progressive Render
+[Render Status: Ready to render]
+[Start Render Button: ENABLED]
+  Click to start rendering
+[Stop Render Button: DISABLED]
+[Save Button: DISABLED]
+[Progressive Rendering: INACTIVE]
+  Available: Start Progressive Render
+Image displayed in SDL window: 320x240
+[Render Status: Ready to render]
+[Start Render Button: ENABLED]
+  Click to start rendering
+[Stop Render Button: DISABLED]
+[Save Button: DISABLED]
+[Progressive Rendering: INACTIVE]

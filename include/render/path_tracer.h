@@ -22,9 +22,9 @@ typedef void* SDL_GLContext;
 // Progressive rendering configuration
 struct ProgressiveConfig {
     int initialSamples = 1;      // Quick preview sample count
-    int targetSamples = 1000;    // Final quality sample count
-    int progressiveSteps = 10;   // Number of progressive improvement passes
-    float updateInterval = 0.5f; // Seconds between progressive updates
+    int targetSamples = 2000;    // High quality sample count for GPU acceleration
+    int progressiveSteps = 12;   // Number of progressive improvement passes
+    float updateInterval = 0.3f; // Seconds between progressive updates
 };
 
 // Progressive rendering callback for intermediate results

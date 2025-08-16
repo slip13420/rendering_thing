@@ -16,7 +16,7 @@
 RenderEngine::RenderEngine() 
     : initialized_(false), render_width_(800), render_height_(600),
       render_state_(RenderState::IDLE), stop_requested_(false), progressive_mode_(false), manual_progressive_mode_(false),
-      render_mode_(RenderMode::AUTO), gpu_initialized_(false) {
+      render_mode_(RenderMode::AUTO), gpu_initialized_(false), camera_moving_(false) {
     initialize();
 }
 
@@ -189,60 +189,78 @@ void RenderEngine::display_image() {
 void RenderEngine::update_camera_preview(const Vector3& camera_pos, const Vector3& camera_target) {
     if (!initialized_) return;
     
-    // Throttle camera preview updates to avoid excessive rendering during rapid movement
-    static auto last_preview_time = std::chrono::steady_clock::now();
-    auto now = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_preview_time);
-    
-    // Only update preview every 100ms to maintain responsiveness without overwhelming
-    if (elapsed.count() < 100 && is_progressive_rendering()) {
-        return;
-    }
-    
-    last_preview_time = now;
-    
-    // Don't interrupt manual progressive renders with camera preview
-    if (manual_progressive_mode_) {
-        std::cout << "Skipping camera preview - manual progressive render in progress" << std::endl;
-        return;
-    }
-    
-    // Stop any existing progressive render for camera preview (only non-manual renders)
-    if (is_progressive_rendering()) {
-        // Double-check manual mode before stopping (race condition protection)
-        if (manual_progressive_mode_) {
-            std::cout << "Skipping camera preview - manual progressive render detected" << std::endl;
-            return;
-        }
-        
-        stop_progressive_render();
-        
-        // Brief wait for cleanup
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
+    // Signal that camera is moving
+    start_camera_movement();
     
     // Update camera position in the scene
     set_camera_position(camera_pos, camera_target);
     
-    // Start a fast progressive render for real-time preview
-    ProgressiveConfig preview_config;
-    preview_config.initialSamples = 1;      // Start with 1 sample for immediate feedback
-    preview_config.targetSamples = 16;      // Low target for responsive preview
-    preview_config.progressiveSteps = 4;    // Few steps for speed
-    preview_config.updateInterval = 0.08f;  // Very fast updates for real-time feel
-    
-    std::cout << "Starting camera preview progressive render..." << std::endl;
-    
-    // Force manual mode to false for camera preview, then start
-    bool saved_manual_mode = manual_progressive_mode_;
-    manual_progressive_mode_ = false;
-    
-    start_progressive_render(preview_config);
-    
-    // Restore previous manual mode if it was true (shouldn't happen, but safety)
-    if (saved_manual_mode) {
-        std::cout << "WARNING: Camera preview interrupted manual progressive render" << std::endl;
+    // Use immediate low-sample render for responsive preview during movement
+    if (path_tracer_) {
+        // Set very low sample count for immediate feedback
+        path_tracer_->set_samples_per_pixel(2); // Very low for fast preview
+        
+        bool success = false;
+        
+        // Try GPU first if available
+        if (gpu_initialized_ && path_tracer_->isGPUAvailable()) {
+            success = path_tracer_->trace_gpu(render_width_, render_height_);
+        }
+        
+        // Fallback to CPU if GPU unavailable or failed
+        if (!success) {
+            path_tracer_->trace(render_width_, render_height_);
+            success = true; // CPU trace always succeeds (may be slow but completes)
+        }
+        
+        if (success && image_output_) {
+            // Update display immediately
+            const auto& image_data = path_tracer_->get_image_data();
+            image_output_->set_image_data(image_data, render_width_, render_height_);
+            image_output_->display_to_screen();
+        }
     }
+}
+
+void RenderEngine::start_camera_movement() {
+    // Stop any existing progressive rendering
+    if (is_progressive_rendering() && !manual_progressive_mode_) {
+        std::cout << "Stopping progressive rendering due to camera movement" << std::endl;
+        stop_progressive_render();
+    }
+    
+    camera_moving_ = true;
+    last_camera_movement_ = std::chrono::steady_clock::now();
+}
+
+void RenderEngine::stop_camera_movement() {
+    camera_moving_ = false;
+    last_camera_movement_ = std::chrono::steady_clock::now();
+    
+    // Start a timer thread to restart progressive rendering after 1 second of no movement
+    std::thread([this]() {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        
+        // Check if camera is still not moving and no manual progressive render is active
+        if (!camera_moving_ && !manual_progressive_mode_) {
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_camera_movement_);
+            
+            // Only restart if it's been at least 1 second since last movement
+            if (elapsed.count() >= 1000) {
+                std::cout << "Camera stopped moving - restarting progressive rendering" << std::endl;
+                
+                // Start high-quality progressive render
+                ProgressiveConfig config;
+                config.initialSamples = 1;
+                config.targetSamples = 200;  // Medium quality for camera position
+                config.progressiveSteps = 8;
+                config.updateInterval = 0.3f;
+                
+                start_progressive_render(config);
+            }
+        }
+    }).detach();
 }
 
 void RenderEngine::start_render() {
@@ -308,12 +326,32 @@ void RenderEngine::start_progressive_render(const ProgressiveConfig& config) {
     manual_progressive_mode_ = true;  // This is a manual progressive render
     set_render_state(RenderState::RENDERING);
     
-    if (render_thread_.joinable()) {
-        render_thread_.join();
+    // If GPU is available, use main thread GPU progressive for live updates
+    if (gpu_initialized_ && path_tracer_ && path_tracer_->isGPUAvailable()) {
+        std::cout << "Using GPU progressive rendering in main thread for live updates..." << std::endl;
+        
+        bool success = start_progressive_gpu_main_thread(config);
+        progressive_mode_ = false;
+        manual_progressive_mode_ = false;
+        
+        if (success) {
+            set_render_state(RenderState::COMPLETED);
+            std::cout << "GPU progressive render completed successfully" << std::endl;
+        } else {
+            std::cout << "GPU progressive render failed, falling back to CPU worker thread..." << std::endl;
+            // Fall through to worker thread CPU rendering
+        }
     }
     
-    render_thread_ = std::thread(&RenderEngine::progressive_render_worker, this, config);
-    std::cout << "Progressive render started" << std::endl;
+    // Use worker thread for CPU progressive rendering (if GPU failed or not available)
+    if (render_state_ == RenderState::RENDERING) {
+        if (render_thread_.joinable()) {
+            render_thread_.join();
+        }
+        
+        render_thread_ = std::thread(&RenderEngine::progressive_render_worker, this, config);
+        std::cout << "Progressive render started in worker thread (CPU)" << std::endl;
+    }
 }
 
 void RenderEngine::stop_progressive_render() {
@@ -846,8 +884,17 @@ bool RenderEngine::start_progressive_gpu_main_thread(const ProgressiveConfig& co
             return false;
         }
         
-        // Process and display the result
+        // Process and display the result with live update
         process_render_completion();
+        
+        // Trigger immediate display update for live progressive rendering
+        if (image_output_) {
+            const auto& image_data = path_tracer_->get_image_data();
+            image_output_->update_progressive_display(image_data, render_width_, render_height_, currentSamples, config.targetSamples);
+            
+            // Force immediate display refresh since UI event loop is blocked during GPU rendering
+            image_output_->display_to_screen();
+        }
         
         std::cout << "GPU Progressive Step " << (step + 1) << " completed successfully" << std::endl;
         

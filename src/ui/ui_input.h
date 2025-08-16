@@ -3,6 +3,7 @@
 #include "core/common.h"
 #include <memory>
 #include <functional>
+#include <set>
 
 // Forward declarations
 class SceneManager;
@@ -32,6 +33,7 @@ public:
 private:
     void handle_camera_input();
     void handle_realtime_camera_input(int keycode);
+    void handle_camera_key_release(int keycode);
     void handle_mouse_look(int delta_x, int delta_y);
     void update_camera_target();
     void get_camera_vectors(Vector3& forward, Vector3& right, Vector3& up) const;
@@ -52,4 +54,7 @@ private:
     int last_mouse_y_;
     float camera_yaw_;   // Horizontal rotation
     float camera_pitch_; // Vertical rotation
+    
+    // Camera movement state tracking
+    std::set<int> pressed_camera_keys_;
 };

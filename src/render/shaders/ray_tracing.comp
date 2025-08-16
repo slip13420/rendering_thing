@@ -5,7 +5,7 @@ layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba8, binding = 0) uniform image2D outputImage;
 
 layout(std430, binding = 1) readonly buffer SceneData {
-    vec4 spheres[];
+    vec4 spheres[]; // Now contains both spheres and cubes - 3 vec4s per primitive
 };
 
 layout(std430, binding = 2) buffer RNGStates {
@@ -50,6 +50,10 @@ vec3 randomUnitVector() {
     return normalize(randomInUnitSphere());
 }
 
+vec3 reflect(vec3 v, vec3 n) {
+    return v - 2.0 * dot(v, n) * n;
+}
+
 // Ray structure
 struct Ray {
     vec3 origin;
@@ -67,7 +71,7 @@ struct HitRecord {
     float t;
     bool frontFace;
     vec3 albedo;
-    float emission;
+    float materialFlags; // 0.0=diffuse, 1.0=metallic, >1.0=emission intensity
 };
 
 bool hitSphere(vec3 center, float radius, Ray ray, float tMin, float tMax, out HitRecord rec) {
@@ -96,26 +100,81 @@ bool hitSphere(vec3 center, float radius, Ray ray, float tMin, float tMax, out H
     return true;
 }
 
+bool hitCube(vec3 center, float size, Ray ray, float tMin, float tMax, out HitRecord rec) {
+    // Axis-aligned bounding box intersection
+    vec3 rayInv = 1.0 / ray.direction;
+    vec3 minBounds = center - vec3(size * 0.5);
+    vec3 maxBounds = center + vec3(size * 0.5);
+    
+    vec3 t1 = (minBounds - ray.origin) * rayInv;
+    vec3 t2 = (maxBounds - ray.origin) * rayInv;
+    
+    vec3 tNear = min(t1, t2);
+    vec3 tFar = max(t1, t2);
+    
+    float tNearMax = max(max(tNear.x, tNear.y), tNear.z);
+    float tFarMin = min(min(tFar.x, tFar.y), tFar.z);
+    
+    if (tNearMax > tFarMin || tFarMin < tMin || tNearMax > tMax) {
+        return false;
+    }
+    
+    float t = (tNearMax > tMin) ? tNearMax : tFarMin;
+    if (t < tMin || t > tMax) return false;
+    
+    rec.t = t;
+    rec.point = rayAt(ray, t);
+    
+    // Calculate normal based on which face was hit
+    vec3 localPoint = rec.point - center;
+    vec3 absLocal = abs(localPoint);
+    float maxComponent = max(max(absLocal.x, absLocal.y), absLocal.z);
+    
+    if (maxComponent == absLocal.x) {
+        rec.normal = vec3(sign(localPoint.x), 0.0, 0.0);
+    } else if (maxComponent == absLocal.y) {
+        rec.normal = vec3(0.0, sign(localPoint.y), 0.0);
+    } else {
+        rec.normal = vec3(0.0, 0.0, sign(localPoint.z));
+    }
+    
+    rec.frontFace = dot(ray.direction, rec.normal) < 0.0;
+    if (!rec.frontFace) rec.normal = -rec.normal;
+    
+    return true;
+}
+
 bool hitWorld(Ray ray, float tMin, float tMax, out HitRecord rec) {
     HitRecord tempRec;
     bool hitAnything = false;
     float closestSo = tMax;
     
-    // Iterate through spheres (each sphere is 2 vec4s: center+radius, albedo+emission)
-    int sphereCount = spheres.length() / 2;
-    for (int i = 0; i < sphereCount; i++) {
-        vec4 sphereData = spheres[i * 2];
-        vec4 materialData = spheres[i * 2 + 1];
+    // Iterate through primitives (each primitive is 3 vec4s: center+size, albedo+material, type+padding)
+    int primitiveCount = spheres.length() / 3;
+    for (int i = 0; i < primitiveCount; i++) {
+        vec4 positionData = spheres[i * 3];
+        vec4 materialData = spheres[i * 3 + 1];
+        vec4 typeData = spheres[i * 3 + 2];
         
-        vec3 center = sphereData.xyz;
-        float radius = sphereData.w;
+        vec3 center = positionData.xyz;
+        float size = positionData.w;
+        float primitiveType = typeData.x;
         
-        if (hitSphere(center, radius, ray, tMin, closestSo, tempRec)) {
+        bool hit = false;
+        if (primitiveType < 0.5) {
+            // Sphere
+            hit = hitSphere(center, size, ray, tMin, closestSo, tempRec);
+        } else {
+            // Cube
+            hit = hitCube(center, size, ray, tMin, closestSo, tempRec);
+        }
+        
+        if (hit) {
             hitAnything = true;
             closestSo = tempRec.t;
             rec = tempRec;
             rec.albedo = materialData.xyz;
-            rec.emission = materialData.w;
+            rec.materialFlags = materialData.w;
         }
     }
     
@@ -132,16 +191,32 @@ vec3 rayColor(Ray initialRay) {
         HitRecord rec;
         if (hitWorld(ray, 0.001, 1000000.0, rec)) {
             // Handle emissive materials (lights)
-            if (rec.emission > 0.0) {
-                color += attenuation * rec.albedo * rec.emission;
+            if (rec.materialFlags > 1.5) {
+                color += attenuation * rec.albedo * rec.materialFlags;
                 break;
             }
             
-            // Lambertian scattering
-            attenuation *= 0.5 * rec.albedo;
-            vec3 target = rec.point + rec.normal + randomUnitVector();
-            ray.origin = rec.point;
-            ray.direction = target - rec.point;
+            if (rec.materialFlags > 0.5) {
+                // Metallic material - reflection
+                vec3 reflected = reflect(normalize(ray.direction), rec.normal);
+                // Add small amount of fuzziness for realistic metal
+                reflected = reflected + randomInUnitSphere() * 0.1;
+                
+                if (dot(reflected, rec.normal) > 0.0) {
+                    attenuation *= rec.albedo;
+                    ray.origin = rec.point;
+                    ray.direction = reflected;
+                } else {
+                    // Absorbed
+                    break;
+                }
+            } else {
+                // Diffuse material - Lambertian scattering
+                attenuation *= rec.albedo;
+                vec3 target = rec.point + rec.normal + randomUnitVector();
+                ray.origin = rec.point;
+                ray.direction = target - rec.point;
+            }
         } else {
             // Sky gradient
             vec3 unitDirection = normalize(ray.direction);

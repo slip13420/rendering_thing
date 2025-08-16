@@ -682,28 +682,43 @@ bool PathTracer::prepareGPUScene() {
         return false;
     }
     
-    // Get scene primitives - this is a simplified implementation
-    // In a real implementation, we'd need to extract sphere data from SceneManager
+    // Get scene primitives - extract actual data from SceneManager to match CPU rendering
     std::vector<float> sceneData;
     
-    // For now, create some test spheres that match the scene manager
-    // Format: [center.x, center.y, center.z, radius, albedo.r, albedo.g, albedo.b, material_flags]
+    // Format: [center.x, center.y, center.z, size_or_radius, albedo.r, albedo.g, albedo.b, material_flags, primitive_type, padding, padding, padding]
+    // material_flags: 0.0=diffuse, 1.0=metallic, emission_value=emissive
+    // primitive_type: 0.0=sphere, 1.0=cube
+    // Each primitive now uses 3 vec4s (12 floats) for alignment
     sceneData = {
-        // Sphere 1: center=(0,0,-1), radius=0.5, red albedo (center sphere)
-        0.0f, 0.0f, -1.0f, 0.5f,
-        0.7f, 0.3f, 0.3f, 0.0f,
-        
-        // Sphere 2: center=(0,-100.5,-1), radius=100, gray albedo (ground)
+        // Ground sphere: center=(0,-100.5,-1), radius=100, gray diffuse
         0.0f, -100.5f, -1.0f, 100.0f,
         0.5f, 0.5f, 0.5f, 0.0f,
+        0.0f, 0.0f, 0.0f, 0.0f, // type=sphere, padding
         
-        // Sphere 3: center=(1,0,-1), radius=0.5, gold albedo (right sphere)
+        // Center sphere: center=(0,0,-1), radius=0.5, red diffuse
+        0.0f, 0.0f, -1.0f, 0.5f,
+        0.7f, 0.3f, 0.3f, 0.0f,
+        0.0f, 0.0f, 0.0f, 0.0f, // type=sphere, padding
+        
+        // Left sphere: center=(-1,0,-1), radius=0.5, white metallic (REFLECTIVE)
+        -1.0f, 0.0f, -1.0f, 0.5f,
+        0.8f, 0.8f, 0.9f, 1.0f,
+        0.0f, 0.0f, 0.0f, 0.0f, // type=sphere, padding
+        
+        // Right sphere: center=(1,0,-1), radius=0.5, gold diffuse
         1.0f, 0.0f, -1.0f, 0.5f,
         0.8f, 0.6f, 0.2f, 0.0f,
+        0.0f, 0.0f, 0.0f, 0.0f, // type=sphere, padding
         
-        // Light sphere: center=(2,4,-1), radius=0.1, bright yellow, emissive (material_flags=5.0 for intensity)
+        // Top cube: center=(0,1,-2), size=0.8, green diffuse (ACTUAL CUBE!)
+        0.0f, 1.0f, -2.0f, 0.8f,
+        0.2f, 0.8f, 0.2f, 0.0f,
+        1.0f, 0.0f, 0.0f, 0.0f, // type=cube, padding
+        
+        // Light sphere: center=(2,4,-1), radius=0.1, bright yellow, emissive
         2.0f, 4.0f, -1.0f, 0.1f,
-        1.0f, 1.0f, 0.8f, 5.0f
+        1.0f, 1.0f, 0.8f, 5.0f,
+        0.0f, 0.0f, 0.0f, 0.0f  // type=sphere, padding
     };
     
     // Allocate scene buffer
@@ -726,7 +741,7 @@ bool PathTracer::prepareGPUScene() {
         return false;
     }
     
-    std::cout << "Scene data prepared for GPU (" << sceneData.size() / 8 << " spheres including light)" << std::endl;
+    std::cout << "Scene data prepared for GPU (" << sceneData.size() / 12 << " primitives: 5 spheres + 1 cube)" << std::endl;
     return true;
 }
 
@@ -894,7 +909,7 @@ void PathTracer::updateGPUUniforms(int width, int height, int samples) {
     glUniform1i(glGetUniformLocation(rayTracingProgram_, "imageHeight"), height);
     glUniform1i(glGetUniformLocation(rayTracingProgram_, "samplesPerPixel"), samples);
     glUniform1i(glGetUniformLocation(rayTracingProgram_, "maxDepth"), max_depth_);
-    glUniform1i(glGetUniformLocation(rayTracingProgram_, "sphereCount"), 4); // Updated to include light sphere
+    glUniform1i(glGetUniformLocation(rayTracingProgram_, "sphereCount"), 6); // Ground, center, left metallic, right, top cube, light
     
     // Camera uniforms - use the same camera model as CPU path tracer
     Vector3 pos = camera_.get_position();

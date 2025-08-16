@@ -87,6 +87,10 @@ public:
     void display_image();
     void update_camera_preview(const Vector3& camera_pos, const Vector3& camera_target);
     
+    // Camera movement handling
+    void start_camera_movement();
+    void stop_camera_movement();
+    
     // GPU acceleration
     void set_render_mode(RenderMode mode);
     RenderMode get_render_mode() const;
@@ -138,4 +142,8 @@ private:
     RenderMode render_mode_;
     bool gpu_initialized_;
     RenderMetrics last_metrics_;
+    
+    // Camera movement state
+    std::atomic<bool> camera_moving_;
+    std::chrono::steady_clock::time_point last_camera_movement_;
 };
