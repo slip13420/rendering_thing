@@ -32,14 +32,160 @@
 #define GL_STREAM_DRAW 0x88E0
 #endif
 
+#ifndef GL_READ_WRITE
+#define GL_READ_WRITE 0x88BA
+#endif
+
+#ifndef GL_READ_ONLY
+#define GL_READ_ONLY 0x88B8
+#endif
+
+#ifndef GL_TRUE
+#define GL_TRUE 1
+#endif
+
+#ifndef GL_FALSE
+#define GL_FALSE 0
+#endif
+
+#ifndef GL_NO_ERROR
+#define GL_NO_ERROR 0
+#endif
+
+#ifndef GL_VIEWPORT
+#define GL_VIEWPORT 0x0BA2
+#endif
+
+#ifndef GL_VERSION
+#define GL_VERSION 0x1F02
+#endif
+
+#ifndef GL_RENDERER
+#define GL_RENDERER 0x1F01
+#endif
+
+// OpenGL types
+typedef unsigned int GLenum;
+typedef int GLint;
+
+// Include SDL for OpenGL function loading
+#include <SDL.h>
+
+// OpenGL function pointers - loaded at runtime
+static void (*glGenBuffers_ptr)(int n, unsigned int* buffers) = nullptr;
+static void (*glDeleteBuffers_ptr)(int n, const unsigned int* buffers) = nullptr;
+static void (*glBindBuffer_ptr)(unsigned int target, unsigned int buffer) = nullptr;
+static void (*glBufferData_ptr)(unsigned int target, long size, const void* data, unsigned int usage) = nullptr;
+static void (*glBufferSubData_ptr)(unsigned int target, long offset, long size, const void* data) = nullptr;
+static void (*glGetBufferSubData_ptr)(unsigned int target, long offset, long size, void* data) = nullptr;
+static void* (*glMapBuffer_ptr)(unsigned int target, unsigned int access) = nullptr;
+static unsigned char (*glUnmapBuffer_ptr)(unsigned int target) = nullptr;
+static void (*glBindBufferBase_ptr)(unsigned int target, unsigned int index, unsigned int buffer) = nullptr;
+static unsigned int (*glGetError_ptr)(void) = nullptr;
+static const unsigned char* (*glGetString_ptr)(unsigned int name) = nullptr;
+
+// Texture function pointers
+static void (*glGenTextures_ptr)(int n, unsigned int* textures) = nullptr;
+static void (*glDeleteTextures_ptr)(int n, const unsigned int* textures) = nullptr;
+static void (*glBindTexture_ptr)(unsigned int target, unsigned int texture) = nullptr;
+static void (*glTexImage2D_ptr)(unsigned int target, int level, int internalformat, int width, int height, int border, unsigned int format, unsigned int type, const void* pixels) = nullptr;
+static void (*glTexParameteri_ptr)(unsigned int target, unsigned int pname, int param) = nullptr;
+static void (*glGetTexImage_ptr)(unsigned int target, int level, unsigned int format, unsigned int type, void* pixels) = nullptr;
+
+// Helper functions to use the loaded function pointers
+static void call_glGenBuffers(int n, unsigned int* buffers) {
+    if (glGenBuffers_ptr) glGenBuffers_ptr(n, buffers);
+}
+static void call_glDeleteBuffers(int n, const unsigned int* buffers) {
+    if (glDeleteBuffers_ptr) glDeleteBuffers_ptr(n, buffers);
+}
+static void call_glBindBuffer(unsigned int target, unsigned int buffer) {
+    if (glBindBuffer_ptr) glBindBuffer_ptr(target, buffer);
+}
+static void call_glBufferData(unsigned int target, long size, const void* data, unsigned int usage) {
+    if (glBufferData_ptr) glBufferData_ptr(target, size, data, usage);
+}
+static unsigned int call_glGetError(void) {
+    if (glGetError_ptr) return glGetError_ptr();
+    return GL_NO_ERROR;
+}
+static const unsigned char* call_glGetString(unsigned int name) {
+    if (glGetString_ptr) return glGetString_ptr(name);
+    return nullptr;
+}
+static void call_glBufferSubData(unsigned int target, long offset, long size, const void* data) {
+    if (glBufferSubData_ptr) glBufferSubData_ptr(target, offset, size, data);
+}
+static void call_glGetBufferSubData(unsigned int target, long offset, long size, void* data) {
+    if (glGetBufferSubData_ptr) glGetBufferSubData_ptr(target, offset, size, data);
+}
+static void* call_glMapBuffer(unsigned int target, unsigned int access) {
+    if (glMapBuffer_ptr) return glMapBuffer_ptr(target, access);
+    return nullptr;
+}
+static unsigned char call_glUnmapBuffer(unsigned int target) {
+    if (glUnmapBuffer_ptr) return glUnmapBuffer_ptr(target);
+    return 0;
+}
+static void call_glBindBufferBase(unsigned int target, unsigned int index, unsigned int buffer) {
+    if (glBindBufferBase_ptr) glBindBufferBase_ptr(target, index, buffer);
+}
+
+// Texture wrapper functions
+static void call_glGenTextures(int n, unsigned int* textures) {
+    if (glGenTextures_ptr) glGenTextures_ptr(n, textures);
+}
+static void call_glDeleteTextures(int n, const unsigned int* textures) {
+    if (glDeleteTextures_ptr) glDeleteTextures_ptr(n, textures);
+}
+static void call_glBindTexture(unsigned int target, unsigned int texture) {
+    if (glBindTexture_ptr) glBindTexture_ptr(target, texture);
+}
+static void call_glTexImage2D(unsigned int target, int level, int internalformat, int width, int height, int border, unsigned int format, unsigned int type, const void* pixels) {
+    if (glTexImage2D_ptr) glTexImage2D_ptr(target, level, internalformat, width, height, border, format, type, pixels);
+}
+static void call_glTexParameteri(unsigned int target, unsigned int pname, int param) {
+    if (glTexParameteri_ptr) glTexParameteri_ptr(target, pname, param);
+}
+static void call_glGetTexImage(unsigned int target, int level, unsigned int format, unsigned int type, void* pixels) {
+    if (glGetTexImage_ptr) glGetTexImage_ptr(target, level, format, type, pixels);
+}
+
+// Function to load OpenGL functions
+static bool loadOpenGLFunctions() {
+    glGenBuffers_ptr = (void(*)(int, unsigned int*))SDL_GL_GetProcAddress("glGenBuffers");
+    glDeleteBuffers_ptr = (void(*)(int, const unsigned int*))SDL_GL_GetProcAddress("glDeleteBuffers");
+    glBindBuffer_ptr = (void(*)(unsigned int, unsigned int))SDL_GL_GetProcAddress("glBindBuffer");
+    glBufferData_ptr = (void(*)(unsigned int, long, const void*, unsigned int))SDL_GL_GetProcAddress("glBufferData");
+    glBufferSubData_ptr = (void(*)(unsigned int, long, long, const void*))SDL_GL_GetProcAddress("glBufferSubData");
+    glGetBufferSubData_ptr = (void(*)(unsigned int, long, long, void*))SDL_GL_GetProcAddress("glGetBufferSubData");
+    glMapBuffer_ptr = (void*(*)(unsigned int, unsigned int))SDL_GL_GetProcAddress("glMapBuffer");
+    glUnmapBuffer_ptr = (unsigned char(*)(unsigned int))SDL_GL_GetProcAddress("glUnmapBuffer");
+    glBindBufferBase_ptr = (void(*)(unsigned int, unsigned int, unsigned int))SDL_GL_GetProcAddress("glBindBufferBase");
+    glGetError_ptr = (unsigned int(*)(void))SDL_GL_GetProcAddress("glGetError");
+    glGetString_ptr = (const unsigned char*(*)(unsigned int))SDL_GL_GetProcAddress("glGetString");
+    
+    // Load texture functions
+    glGenTextures_ptr = (void(*)(int, unsigned int*))SDL_GL_GetProcAddress("glGenTextures");
+    glDeleteTextures_ptr = (void(*)(int, const unsigned int*))SDL_GL_GetProcAddress("glDeleteTextures");
+    glBindTexture_ptr = (void(*)(unsigned int, unsigned int))SDL_GL_GetProcAddress("glBindTexture");
+    glTexImage2D_ptr = (void(*)(unsigned int, int, int, int, int, int, unsigned int, unsigned int, const void*))SDL_GL_GetProcAddress("glTexImage2D");
+    glTexParameteri_ptr = (void(*)(unsigned int, unsigned int, int))SDL_GL_GetProcAddress("glTexParameteri");
+    glGetTexImage_ptr = (void(*)(unsigned int, int, unsigned int, unsigned int, void*))SDL_GL_GetProcAddress("glGetTexImage");
+    
+    return glGenBuffers_ptr && glDeleteBuffers_ptr && glBindBuffer_ptr && 
+           glBufferData_ptr && glGetError_ptr && glGetString_ptr &&
+           glGenTextures_ptr && glBindTexture_ptr && glGetTexImage_ptr;
+}
+
 #endif
 
 GPUMemoryManager::GPUMemoryManager()
     : initialized_(false)
     , profiling_enabled_(false)
     , stats_()
-    , transfer_stats_()
     , memory_leak_detection_enabled_(false)
+    , transfer_stats_()
 {
 }
 
@@ -53,8 +199,14 @@ bool GPUMemoryManager::initialize() {
         return true;
     }
     
+    // Load OpenGL functions first
+    if (!loadOpenGLFunctions()) {
+        last_error_ = "Failed to load OpenGL functions";
+        return false;
+    }
+    
     // Check for required OpenGL extensions
-    const GLubyte* extensions = glGetString(GL_EXTENSIONS);
+    const GLubyte* extensions = call_glGetString(GL_EXTENSIONS);
     if (!extensions) {
         last_error_ = "Failed to get OpenGL extensions";
         return false;
@@ -134,6 +286,9 @@ std::shared_ptr<GPUBuffer> GPUMemoryManager::allocateBuffer(
     buffer->name = name.empty() ? ("buffer_" + std::to_string(allocated_buffers_.size())) : name;
     
     if (!createGLBuffer(*buffer, type, usage)) {
+        if (profiling_enabled_) {
+            std::cerr << "Failed to create GL buffer in allocateBuffer" << std::endl;
+        }
         return nullptr;
     }
     
@@ -226,10 +381,10 @@ bool GPUMemoryManager::transferToGPU(std::shared_ptr<GPUBuffer> buffer, const vo
         return false;
     }
     
-    glBindBuffer(buffer->target, buffer->id);
-    glBufferSubData(buffer->target, offset, size, data);
+    call_glBindBuffer(buffer->target, buffer->id);
+    call_glBufferSubData(buffer->target, offset, size, data);
     
-    GLenum error = glGetError();
+    GLenum error = call_glGetError();
     if (error != GL_NO_ERROR) {
         std::ostringstream oss;
         oss << "OpenGL error during data transfer to GPU: " << error;
@@ -237,7 +392,7 @@ bool GPUMemoryManager::transferToGPU(std::shared_ptr<GPUBuffer> buffer, const vo
         return false;
     }
     
-    glBindBuffer(buffer->target, 0);
+    call_glBindBuffer(buffer->target, 0);
     
     if (profiling_enabled_) {
         std::cout << "Transferred " << size << " bytes to GPU buffer: " << buffer->name << std::endl;
@@ -262,10 +417,10 @@ bool GPUMemoryManager::transferFromGPU(std::shared_ptr<GPUBuffer> buffer, void* 
         return false;
     }
     
-    glBindBuffer(buffer->target, buffer->id);
-    glGetBufferSubData(buffer->target, offset, size, data);
+    call_glBindBuffer(buffer->target, buffer->id);
+    call_glGetBufferSubData(buffer->target, offset, size, data);
     
-    GLenum error = glGetError();
+    GLenum error = call_glGetError();
     if (error != GL_NO_ERROR) {
         std::ostringstream oss;
         oss << "OpenGL error during data transfer from GPU: " << error;
@@ -273,7 +428,7 @@ bool GPUMemoryManager::transferFromGPU(std::shared_ptr<GPUBuffer> buffer, void* 
         return false;
     }
     
-    glBindBuffer(buffer->target, 0);
+    call_glBindBuffer(buffer->target, 0);
     
     if (profiling_enabled_) {
         std::cout << "Transferred " << size << " bytes from GPU buffer: " << buffer->name << std::endl;
@@ -297,19 +452,19 @@ bool GPUMemoryManager::mapBuffer(std::shared_ptr<GPUBuffer> buffer, bool read_wr
         return false;
     }
     
-    glBindBuffer(buffer->target, buffer->id);
+    call_glBindBuffer(buffer->target, buffer->id);
     
     GLenum access = read_write ? GL_READ_WRITE : GL_WRITE_ONLY;
-    buffer->mapped_pointer = glMapBuffer(buffer->target, access);
+    buffer->mapped_pointer = call_glMapBuffer(buffer->target, access);
     
     if (!buffer->mapped_pointer) {
         last_error_ = "Failed to map GPU buffer";
-        glBindBuffer(buffer->target, 0);
+        call_glBindBuffer(buffer->target, 0);
         return false;
     }
     
     buffer->mapped = true;
-    glBindBuffer(buffer->target, 0);
+    call_glBindBuffer(buffer->target, 0);
     
     return true;
 #else
@@ -324,9 +479,9 @@ bool GPUMemoryManager::unmapBuffer(std::shared_ptr<GPUBuffer> buffer) {
         return false;
     }
     
-    glBindBuffer(buffer->target, buffer->id);
-    GLboolean result = glUnmapBuffer(buffer->target);
-    glBindBuffer(buffer->target, 0);
+    call_glBindBuffer(buffer->target, buffer->id);
+    GLboolean result = call_glUnmapBuffer(buffer->target);
+    call_glBindBuffer(buffer->target, 0);
     
     buffer->mapped = false;
     buffer->mapped_pointer = nullptr;
@@ -341,9 +496,9 @@ void GPUMemoryManager::bindBuffer(std::shared_ptr<GPUBuffer> buffer, unsigned in
 #ifdef USE_GPU
     if (buffer && initialized_) {
         if (buffer->target == GL_SHADER_STORAGE_BUFFER || buffer->target == GL_UNIFORM_BUFFER) {
-            glBindBufferBase(buffer->target, binding_point, buffer->id);
+            call_glBindBufferBase(buffer->target, binding_point, buffer->id);
         } else {
-            glBindBuffer(buffer->target, buffer->id);
+            call_glBindBuffer(buffer->target, buffer->id);
         }
     }
 #endif
@@ -352,7 +507,7 @@ void GPUMemoryManager::bindBuffer(std::shared_ptr<GPUBuffer> buffer, unsigned in
 void GPUMemoryManager::unbindBuffer(GPUBufferType type) {
 #ifdef USE_GPU
     if (initialized_) {
-        glBindBuffer(getGLTarget(type), 0);
+        call_glBindBuffer(getGLTarget(type), 0);
     }
 #endif
 }
@@ -400,30 +555,120 @@ std::string GPUMemoryManager::getErrorMessage() const {
 
 bool GPUMemoryManager::createGLBuffer(GPUBuffer& buffer, GPUBufferType type, GPUUsagePattern usage) {
 #ifdef USE_GPU
+    if (profiling_enabled_) {
+        std::cout << "Creating GL buffer: size=" << buffer.size << ", type=" << static_cast<int>(type) << std::endl;
+    }
+    
     buffer.target = getGLTarget(type);
     buffer.usage = getGLUsage(usage);
     
-    glGenBuffers(1, &buffer.id);
-    if (buffer.id == 0) {
-        last_error_ = "Failed to generate GPU buffer";
+    if (profiling_enabled_) {
+        std::cout << "GL buffer target=" << buffer.target << ", usage=" << buffer.usage << std::endl;
+    }
+    
+    // Check if we have a valid OpenGL context and ensure it's current
+    // Clear any previous OpenGL errors first  
+    while (call_glGetError() != GL_NO_ERROR) {}
+    
+    // Check if we have a current OpenGL context
+    auto current_context = SDL_GL_GetCurrentContext();
+    if (!current_context) {
+        last_error_ = "No current OpenGL context available for buffer creation";
+        std::cerr << "ERROR: " << last_error_ << std::endl;
+        return false;
+    } else {
+        if (profiling_enabled_) {
+            std::cout << "OpenGL context is current: " << current_context << std::endl;
+        }
+    }
+    
+    // Load OpenGL functions - always check if they're actually available
+    if (!glGenBuffers_ptr || !glDeleteBuffers_ptr || !glBindBuffer_ptr || !glBufferData_ptr || 
+        !glGenTextures_ptr || !glBindTexture_ptr || !glGetTexImage_ptr) {
+        if (profiling_enabled_) {
+            std::cout << "OpenGL functions need loading..." << std::endl;
+        }
+        if (loadOpenGLFunctions()) {
+            if (profiling_enabled_) {
+                std::cout << "OpenGL functions loaded successfully" << std::endl;
+            }
+        } else {
+            last_error_ = "Failed to load OpenGL functions";
+            std::cerr << "ERROR: " << last_error_ << std::endl;
+            
+            // Debug info about what failed
+            std::cerr << "DEBUG: glGenBuffers_ptr = " << (void*)glGenBuffers_ptr << std::endl;
+            std::cerr << "DEBUG: glDeleteBuffers_ptr = " << (void*)glDeleteBuffers_ptr << std::endl;
+            return false;
+        }
+    } else {
+        if (profiling_enabled_) {
+            std::cout << "OpenGL functions already loaded" << std::endl;
+        }
+    }
+    
+    // Check OpenGL context and version info
+    if (profiling_enabled_) {
+        std::cout << "Attempting GPU buffer creation..." << std::endl;
+        
+        // Check OpenGL version and extensions
+        const char* version = (const char*)call_glGetString(GL_VERSION);
+        const char* renderer = (const char*)call_glGetString(GL_RENDERER);
+        if (version && renderer) {
+            std::cout << "OpenGL Version: " << version << std::endl;
+            std::cout << "OpenGL Renderer: " << renderer << std::endl;
+        } else {
+            std::cout << "WARNING: Could not get OpenGL version info" << std::endl;
+        }
+    }
+    
+    call_glGenBuffers(1, &buffer.id);
+    GLenum gen_error = call_glGetError();
+    if (buffer.id == 0 || gen_error != GL_NO_ERROR) {
+        std::ostringstream oss;
+        oss << "Failed to generate GPU buffer. glGenBuffers returned: " << buffer.id 
+            << ", OpenGL error: " << gen_error;
+        last_error_ = oss.str();
+        std::cerr << "GPU buffer creation failed: " << last_error_ << std::endl;
         return false;
     }
     
-    glBindBuffer(buffer.target, buffer.id);
-    glBufferData(buffer.target, buffer.size, nullptr, buffer.usage);
+    if (profiling_enabled_) {
+        std::cout << "Generated GL buffer ID: " << buffer.id << std::endl;
+    }
     
-    GLenum error = glGetError();
-    if (error != GL_NO_ERROR) {
+    call_glBindBuffer(buffer.target, buffer.id);
+    GLenum bind_error = call_glGetError();
+    if (bind_error != GL_NO_ERROR) {
         std::ostringstream oss;
-        oss << "OpenGL error during buffer creation: " << error;
+        oss << "OpenGL error during buffer bind: " << bind_error;
         last_error_ = oss.str();
-        
-        glDeleteBuffers(1, &buffer.id);
+        std::cerr << "GPU buffer bind failed: " << last_error_ << std::endl;
+        call_glDeleteBuffers(1, &buffer.id);
         buffer.id = 0;
         return false;
     }
     
-    glBindBuffer(buffer.target, 0);
+    call_glBufferData(buffer.target, buffer.size, nullptr, buffer.usage);
+    
+    GLenum error = call_glGetError();
+    if (error != GL_NO_ERROR) {
+        std::ostringstream oss;
+        oss << "OpenGL error during buffer creation: " << error;
+        last_error_ = oss.str();
+        std::cerr << "GPU buffer data allocation failed: " << last_error_ << std::endl;
+        
+        call_glDeleteBuffers(1, &buffer.id);
+        buffer.id = 0;
+        return false;
+    }
+    
+    call_glBindBuffer(buffer.target, 0);
+    
+    if (profiling_enabled_) {
+        std::cout << "GL buffer created successfully: ID=" << buffer.id << std::endl;
+    }
+    
     return true;
 #else
     last_error_ = "GPU support not compiled in";
@@ -434,7 +679,7 @@ bool GPUMemoryManager::createGLBuffer(GPUBuffer& buffer, GPUBufferType type, GPU
 void GPUMemoryManager::destroyGLBuffer(GPUBuffer& buffer) {
 #ifdef USE_GPU
     if (buffer.id != 0) {
-        glDeleteBuffers(1, &buffer.id);
+        call_glDeleteBuffers(1, &buffer.id);
         buffer.id = 0;
     }
 #endif
@@ -657,10 +902,10 @@ bool GPUMemoryManager::transferBatched(const std::vector<std::pair<std::shared_p
             continue;
         }
         
-        glBindBuffer(buffer->target, buffer->id);
-        glBufferSubData(buffer->target, 0, buffer->size, data);
+        call_glBindBuffer(buffer->target, buffer->id);
+        call_glBufferSubData(buffer->target, 0, buffer->size, data);
         
-        GLenum error = glGetError();
+        GLenum error = call_glGetError();
         if (error != GL_NO_ERROR) {
             all_success = false;
             std::ostringstream oss;
@@ -673,7 +918,7 @@ bool GPUMemoryManager::transferBatched(const std::vector<std::pair<std::shared_p
     
     // Unbind buffer
     if (!transfers.empty()) {
-        glBindBuffer(transfers[0].first->target, 0);
+        call_glBindBuffer(transfers[0].first->target, 0);
     }
     
     auto end_time = getTimestamp();
@@ -719,7 +964,7 @@ std::chrono::high_resolution_clock::time_point GPUMemoryManager::getTimestamp() 
 std::shared_ptr<GPUBuffer> GPUMemoryManager::allocateFromExistingPool(size_t size, GPUBufferType type, GPUUsagePattern usage) {
     // Find the best fitting pool
     for (auto& [pool_size, pool] : memory_pools_) {
-        if (pool_size >= size && 
+        if (pool->buffer_size >= size && 
             pool->buffer_type == type && 
             pool->usage_pattern == usage && 
             !pool->free_buffers.empty()) {
@@ -731,7 +976,7 @@ std::shared_ptr<GPUBuffer> GPUMemoryManager::allocateFromExistingPool(size_t siz
             
             if (profiling_enabled_) {
                 std::cout << "Allocated from pool: " << buffer->name 
-                          << " (pool_size=" << pool_size << ")" << std::endl;
+                          << " (pool_size=" << pool->buffer_size << ")" << std::endl;
             }
             
             return buffer;
@@ -772,36 +1017,8 @@ size_t GPUMemoryManager::calculateOptimalPoolSize(GPUBufferType type) const {
             return 1 * 1024 * 1024; // 1MB default
     }
 }
+
 // Diagnostic and profiling methods
-void GPUMemoryManager::enableMemoryLeakDetection(bool enable) {
-    memory_leak_detection_enabled_ = enable;
-    if (enable && profiling_enabled_) {
-        std::cout << "Memory leak detection enabled" << std::endl;
-    }
-}
-
-void GPUMemoryManager::reportMemoryLeaks() const {
-    std::cout << "=== GPU Memory Leak Report ===" << std::endl;
-    std::cout << "No memory leaks detected" << std::endl;
-    std::cout << "=== End Memory Leak Report ===" << std::endl;
-}
-
-void GPUMemoryManager::generateMemoryReport() const {
-    std::cout << "=== GPU Memory Detailed Report ===" << std::endl;
-    std::cout << "Total allocated: " << stats_.total_allocated << " bytes" << std::endl;
-    std::cout << "Total used: " << stats_.total_used << " bytes" << std::endl;
-    std::cout << "Buffer count: " << stats_.buffer_count << std::endl;
-    dumpMemoryPoolStatus();
-    std::cout << "=== End Detailed Report ===" << std::endl;
-}
-
-void GPUMemoryManager::validateMemoryConsistency() const {
-    std::cout << "Memory consistency validation PASSED" << std::endl;
-}
-
-void GPUMemoryManager::dumpMemoryPoolStatus() const {
-    std::cout << "Memory pools: " << memory_pools_.size() << std::endl;
-}
 
 void GPUMemoryManager::trackBufferAllocation(const std::string& buffer_name) {
     if (memory_leak_detection_enabled_ && !buffer_name.empty()) {

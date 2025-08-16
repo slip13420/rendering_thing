@@ -58,6 +58,9 @@ public:
     bool is_window_open() const;
     void close_window();
     
+    // OpenGL context management for multi-threading
+    bool make_context_current();
+    
     // Legacy method names for compatibility
     void saveToFile(const std::string& filename) { save_to_file(filename); }
     void displayToScreen() { display_to_screen(); }
@@ -87,5 +90,6 @@ private:
     SDL_Window* window_;
     SDL_Renderer* renderer_;
     SDL_Texture* texture_;
+    void* gl_context_; // SDL_GLContext (using void* to avoid SDL header dependency)
 #endif
 };

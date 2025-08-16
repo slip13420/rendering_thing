@@ -17,6 +17,42 @@
 #define GL_ALL_BARRIER_BITS 0xFFFFFFFF
 #endif
 
+#ifndef GL_MAX_COMPUTE_WORK_GROUP_SIZE
+#define GL_MAX_COMPUTE_WORK_GROUP_SIZE 0x91BF
+#endif
+
+#ifndef GL_COMPILE_STATUS
+#define GL_COMPILE_STATUS 0x8B81
+#endif
+
+#ifndef GL_LINK_STATUS
+#define GL_LINK_STATUS 0x8B82
+#endif
+
+#ifndef GL_INFO_LOG_LENGTH
+#define GL_INFO_LOG_LENGTH 0x8B84
+#endif
+
+// Declare missing OpenGL functions as extern
+extern "C" {
+    void glGetIntegeri_v(unsigned int target, unsigned int index, int* data);
+    void glDeleteProgram(unsigned int program);
+    void glDeleteShader(unsigned int shader);
+    unsigned int glCreateShader(unsigned int type);
+    void glShaderSource(unsigned int shader, int count, const char* const* string, const int* length);
+    void glCompileShader(unsigned int shader);
+    void glGetShaderiv(unsigned int shader, unsigned int pname, int* params);
+    unsigned int glCreateProgram(void);
+    void glAttachShader(unsigned int program, unsigned int shader);
+    void glLinkProgram(unsigned int program);
+    void glGetProgramiv(unsigned int program, unsigned int pname, int* params);
+    void glUseProgram(unsigned int program);
+    void glDispatchCompute(unsigned int num_groups_x, unsigned int num_groups_y, unsigned int num_groups_z);
+    void glMemoryBarrier(unsigned int barriers);
+    void glGetShaderInfoLog(unsigned int shader, int bufSize, int* length, char* infoLog);
+    void glGetProgramInfoLog(unsigned int program, int bufSize, int* length, char* infoLog);
+}
+
 #endif
 
 GPUComputePipeline::GPUComputePipeline()
@@ -331,6 +367,14 @@ void GPUComputePipeline::enableDebugging(bool enable) {
 
 bool GPUComputePipeline::isDebuggingEnabled() const {
     return debugging_enabled_;
+}
+
+unsigned int GPUComputePipeline::getProgramHandle() const {
+#ifdef USE_GPU
+    return compute_program_;
+#else
+    return 0;
+#endif
 }
 
 bool GPUComputePipeline::checkGLExtensions() {

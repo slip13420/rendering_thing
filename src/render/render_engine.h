@@ -37,6 +37,11 @@ struct RenderMetrics {
     int samplesPerPixel = 0;
     int imageWidth = 0;
     int imageHeight = 0;
+    float cpu_utilization = 0.0f;
+    float gpu_utilization = 0.0f;
+    float memory_usage_mb = 0.0f;
+    float render_time_ms = 0.0f;
+    int samples_per_second = 0;
 };
 
 class RenderEngine {
@@ -89,6 +94,10 @@ public:
     bool initialize_gpu();
     void cleanup_gpu();
     RenderMetrics get_render_metrics() const;
+    
+    // Main thread GPU rendering (requires active OpenGL context)
+    bool render_gpu_main_thread();
+    bool start_progressive_gpu_main_thread(const ProgressiveConfig& config);
     
 private:
     // Threading and state management

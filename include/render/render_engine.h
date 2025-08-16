@@ -68,6 +68,10 @@ public:
     void cleanup_gpu();
     RenderMetrics get_render_metrics() const;
     
+    // Main thread GPU rendering (requires active OpenGL context)
+    bool render_gpu_main_thread();
+    bool start_progressive_gpu_main_thread(const ProgressiveConfig& config);
+    
 private:
     void render_worker();
     void progressive_render_worker(const ProgressiveConfig& config);

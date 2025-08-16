@@ -17,6 +17,7 @@ ImageOutput::ImageOutput() : width_(0), height_(0), window_open_(false), progres
     window_ = nullptr;
     renderer_ = nullptr;
     texture_ = nullptr;
+    gl_context_ = nullptr;
 #endif
 }
 
@@ -239,8 +240,38 @@ bool ImageOutput::create_window(const std::string& title, int width, int height)
         return false;
     }
     
+    // Create OpenGL context for compute shaders
+    gl_context_ = static_cast<void*>(SDL_GL_CreateContext(window_));
+    if (!gl_context_) {
+        std::cerr << "Failed to create OpenGL context: " << SDL_GetError() << std::endl;
+        SDL_DestroyTexture(texture_);
+        SDL_DestroyRenderer(renderer_);
+        SDL_DestroyWindow(window_);
+        texture_ = nullptr;
+        renderer_ = nullptr;
+        window_ = nullptr;
+        SDL_Quit();
+        return false;
+    }
+    
+    // Make the context current
+    if (SDL_GL_MakeCurrent(window_, static_cast<SDL_GLContext>(gl_context_)) != 0) {
+        std::cerr << "Failed to make OpenGL context current: " << SDL_GetError() << std::endl;
+        SDL_GL_DeleteContext(static_cast<SDL_GLContext>(gl_context_));
+        SDL_DestroyTexture(texture_);
+        SDL_DestroyRenderer(renderer_);
+        SDL_DestroyWindow(window_);
+        gl_context_ = nullptr;
+        texture_ = nullptr;
+        renderer_ = nullptr;
+        window_ = nullptr;
+        SDL_Quit();
+        return false;
+    }
+    
     window_open_ = true;
     std::cout << "Created SDL+OpenGL window: " << width << "x" << height << std::endl;
+    std::cout << "OpenGL context created and activated" << std::endl;
     return true;
 #else
     return false;
@@ -289,6 +320,10 @@ void ImageOutput::close_window() {
         SDL_DestroyRenderer(renderer_);
         renderer_ = nullptr;
     }
+    if (gl_context_) {
+        SDL_GL_DeleteContext(static_cast<SDL_GLContext>(gl_context_));
+        gl_context_ = nullptr;
+    }
     if (window_) {
         SDL_DestroyWindow(window_);
         window_ = nullptr;
@@ -302,6 +337,22 @@ void ImageOutput::close_window() {
 
 bool ImageOutput::is_window_open() const {
     return window_open_;
+}
+
+bool ImageOutput::make_context_current() {
+#ifdef USE_SDL
+    if (window_ && gl_context_) {
+        if (SDL_GL_MakeCurrent(window_, static_cast<SDL_GLContext>(gl_context_)) == 0) {
+            return true;
+        } else {
+            std::cerr << "Failed to make OpenGL context current: " << SDL_GetError() << std::endl;
+            return false;
+        }
+    }
+    return false;
+#else
+    return false;
+#endif
 }
 
 void ImageOutput::update_texture() {

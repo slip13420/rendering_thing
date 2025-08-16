@@ -272,16 +272,53 @@ void UIInput::handle_realtime_camera_input(int keycode) {
                 std::cout << "No render engine available!" << std::endl;
             }
             break;
+        case SDLK_u:
+            std::cout << "U key pressed - Testing GPU Main Thread Rendering!" << std::endl;
+            if (render_engine_) {
+                std::cout << "Attempting GPU rendering in main thread..." << std::endl;
+                bool success = render_engine_->render_gpu_main_thread();
+                if (success) {
+                    std::cout << "GPU main thread rendering completed successfully!" << std::endl;
+                    render_engine_->display_image();
+                } else {
+                    std::cout << "GPU main thread rendering failed!" << std::endl;
+                }
+            } else {
+                std::cout << "No render engine available!" << std::endl;
+            }
+            break;
         case SDLK_m:
             std::cout << "M key pressed - Starting Progressive Render!" << std::endl;
             if (render_engine_) {
                 ProgressiveConfig config;
                 config.initialSamples = 1;
-                config.targetSamples = 1000;
-                config.progressiveSteps = 12;
-                config.updateInterval = 0.4f;
-                std::cout << "Starting progressive render (1->1000 samples, 12 steps)..." << std::endl;
-                render_engine_->start_progressive_render(config);
+                config.targetSamples = 100;  // Reduced for faster GPU progressive
+                config.progressiveSteps = 8;  // Fewer steps for GPU efficiency
+                config.updateInterval = 0.3f;
+                
+                // Try GPU progressive rendering first
+                if (render_engine_->is_gpu_available()) {
+                    std::cout << "Attempting GPU progressive rendering (1->100 samples, 8 steps)..." << std::endl;
+                    bool success = render_engine_->start_progressive_gpu_main_thread(config);
+                    if (success) {
+                        std::cout << "GPU progressive rendering completed successfully!" << std::endl;
+                    } else {
+                        std::cout << "GPU progressive rendering failed, falling back to CPU..." << std::endl;
+                        // Fallback to CPU progressive
+                        config.targetSamples = 1000;  // CPU can handle more samples
+                        config.progressiveSteps = 12;
+                        config.updateInterval = 0.4f;
+                        std::cout << "Starting CPU progressive render (1->1000 samples, 12 steps)..." << std::endl;
+                        render_engine_->start_progressive_render(config);
+                    }
+                } else {
+                    // No GPU available, use CPU progressive
+                    config.targetSamples = 1000;
+                    config.progressiveSteps = 12;
+                    config.updateInterval = 0.4f;
+                    std::cout << "Starting CPU progressive render (1->1000 samples, 12 steps)..." << std::endl;
+                    render_engine_->start_progressive_render(config);
+                }
             } else {
                 std::cout << "No render engine available!" << std::endl;
             }
@@ -387,6 +424,7 @@ void UIInput::print_camera_controls() const {
     std::cout << "Q/ESC - Quit application" << std::endl;
     std::cout << "\n=== RENDER CONTROLS ===" << std::endl;
     std::cout << "G   - Start standard rendering" << std::endl;
+    std::cout << "U   - GPU rendering in main thread (test)" << std::endl;
     std::cout << "M   - Start progressive rendering (1->1000 samples)" << std::endl;
     std::cout << "T   - Stop/cancel rendering" << std::endl;
     std::cout << "V   - Save rendered image (after completion)" << std::endl;

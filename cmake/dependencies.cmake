@@ -162,8 +162,8 @@ function(validate_gpu_capabilities)
     if(USE_GPU)
         message(STATUS "=== GPU Capability Validation ===")
         
-        # Check OpenGL availability
-        if(NOT OpenGL_FOUND)
+        # Check OpenGL availability (either via pkg-config or CMake FindOpenGL)
+        if(NOT GL_FOUND AND NOT OpenGL_FOUND)
             message(WARNING "OpenGL not found - GPU acceleration disabled")
             set(USE_GPU OFF PARENT_SCOPE)
             return()
@@ -232,5 +232,4 @@ endfunction()
 # Validate that dependencies are properly configured
 check_dependencies_available()
 
-# Validate GPU capabilities if enabled
-validate_gpu_capabilities()
+# Note: GPU validation moved to main CMakeLists.txt after GPU setup

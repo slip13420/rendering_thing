@@ -7,6 +7,7 @@
 
 #ifdef USE_GPU
 #include <GL/gl.h>
+#include <GL/glext.h>
 #endif
 
 struct WorkGroupSize {
@@ -61,6 +62,9 @@ public:
     
     void enableDebugging(bool enable = true);
     bool isDebuggingEnabled() const;
+    
+    // Program access for advanced usage
+    unsigned int getProgramHandle() const;
     
 private:
     bool checkGLExtensions();

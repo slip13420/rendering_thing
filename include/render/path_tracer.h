@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/common.h"
+#include "core/camera.h"
 #include <random>
 #include <memory>
 #include <functional>
@@ -8,10 +9,15 @@
 
 // Forward declarations
 class SceneManager;
-class Camera;
 class GPUComputePipeline;
 class GPUMemoryManager;
 class GPURandomGenerator;
+struct GPUBuffer;
+
+#ifdef USE_GPU
+struct SDL_Window;
+typedef void* SDL_GLContext;
+#endif
 
 // Progressive rendering configuration
 struct ProgressiveConfig {
@@ -83,6 +89,10 @@ public:
     
     // Accuracy validation
     bool validateGPUAccuracy(const std::vector<Color>& cpuResult, const std::vector<Color>& gpuResult, float tolerance = 0.01f);
+    
+    // Context management
+    void captureOpenGLContext(); // Store current window/context for GPU operations
+    bool activateGPUContext(); // Switch to the context where GPU resources were created
 #endif
     
     // Get rendered data
@@ -126,6 +136,10 @@ private:
     unsigned int rayTracingProgram_;
     unsigned int outputTexture_;
     std::shared_ptr<GPUBuffer> sceneBuffer_;
+    
+    // OpenGL context management for GPU operations
+    SDL_Window* gl_window_;
+    SDL_GLContext gl_context_;
     std::shared_ptr<GPUBuffer> rngBuffer_;
 #endif
 };

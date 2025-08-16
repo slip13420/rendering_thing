@@ -1,13 +1,16 @@
 #include "render_engine.h"
-#include "path_tracer.h"
+#include "render/path_tracer.h"
 #include "core/scene_manager.h"
 #include "core/camera.h"
 #include "image_output.h"
 #include <iostream>
+#include <thread>
+#include <chrono>
 
 #ifdef USE_GPU
 #include "gpu_compute.h"
 #include "gpu_memory.h"
+#include <SDL.h>
 #endif
 
 RenderEngine::RenderEngine() 
@@ -52,7 +55,8 @@ void RenderEngine::initialize() {
         image_output_->initialize_display(render_width_, render_height_);
     }
     
-    // Initialize GPU acceleration if available
+    // Initialize GPU acceleration if available - AFTER display initialization
+    // to ensure OpenGL context is available
     if (initialize_gpu()) {
         std::cout << "GPU acceleration initialized successfully" << std::endl;
     } else {
@@ -71,8 +75,16 @@ void RenderEngine::render() {
     
     std::cout << "Starting render (" << render_width_ << "x" << render_height_ << ")" << std::endl;
     
-    // Execute path tracing
+    // Execute path tracing with GPU/CPU hybrid mode
+#ifdef USE_GPU
+    if (gpu_initialized_ && path_tracer_->isGPUAvailable()) {
+        path_tracer_->trace_hybrid(render_width_, render_height_, PathTracer::RenderMode::HYBRID_AUTO);
+    } else {
+        path_tracer_->trace(render_width_, render_height_);
+    }
+#else
     path_tracer_->trace(render_width_, render_height_);
+#endif
     
     // Get the rendered image data and pass it to image output
     const auto& image_data = path_tracer_->get_image_data();
@@ -105,9 +117,11 @@ void RenderEngine::set_scene_manager(std::shared_ptr<SceneManager> scene_manager
     }
     
     // Connect GPU memory manager if available
+#ifdef USE_GPU
     if (gpu_initialized_ && gpu_memory_ && scene_manager_) {
         scene_manager_->setGPUMemoryManager(gpu_memory_);
     }
+#endif
 }
 
 void RenderEngine::set_image_output(std::shared_ptr<ImageOutput> image_output) {
@@ -327,6 +341,14 @@ void RenderEngine::render_worker() {
     try {
         std::cout << "Starting render orchestration (" << render_width_ << "x" << render_height_ << ")" << std::endl;
         
+        // GPU buffers should be pre-allocated in main thread
+        // Skip context management since no new allocations needed
+#ifdef USE_GPU
+        if (gpu_initialized_) {
+            std::cout << "Using pre-allocated GPU buffers for rendering..." << std::endl;
+        }
+#endif
+        
         // Render pipeline initialization
         if (!validate_render_components()) {
             set_render_state(RenderState::ERROR);
@@ -341,7 +363,21 @@ void RenderEngine::render_worker() {
         
         // Execute path tracing with interruption support
         std::cout << "Executing PathTracer with current scene configuration..." << std::endl;
+        
+        // CRITICAL: GPU operations must happen in main thread where OpenGL context is current
+        // Worker threads cannot access OpenGL context, so we force CPU rendering here
+#ifdef USE_GPU
+        bool completed;
+        if (gpu_initialized_ && path_tracer_->isGPUAvailable()) {
+            std::cout << "GPU available but worker thread cannot access OpenGL context" << std::endl;
+            std::cout << "Using CPU rendering in worker thread" << std::endl;
+            completed = path_tracer_->trace_interruptible(render_width_, render_height_);
+        } else {
+            completed = path_tracer_->trace_interruptible(render_width_, render_height_);
+        }
+#else
         bool completed = path_tracer_->trace_interruptible(render_width_, render_height_);
+#endif
         
         // Check if we were stopped during rendering
         if (stop_requested_ || !completed) {
@@ -367,6 +403,14 @@ void RenderEngine::progressive_render_worker(const ProgressiveConfig& config) {
     try {
         std::cout << "Starting progressive render orchestration (" << render_width_ << "x" << render_height_ << ")" << std::endl;
         
+        // GPU buffers should be pre-allocated in main thread
+        // Skip context management since no new allocations needed
+#ifdef USE_GPU
+        if (gpu_initialized_) {
+            std::cout << "Using pre-allocated GPU buffers for progressive rendering..." << std::endl;
+        }
+#endif
+        
         // Render pipeline initialization
         if (!validate_render_components()) {
             set_render_state(RenderState::ERROR);
@@ -382,6 +426,7 @@ void RenderEngine::progressive_render_worker(const ProgressiveConfig& config) {
         // Create progressive callback to update display in real-time with GPU memory coordination
         auto progressive_callback = [this](const std::vector<Color>& data, int width, int height, int current_samples, int target_samples) {
             // Coordinate GPU memory updates with progressive rendering timing
+#ifdef USE_GPU
             if (gpu_initialized_ && gpu_memory_ && scene_manager_) {
                 // Check if GPU memory optimization is needed during progressive render
                 auto gpu_stats = gpu_memory_->getMemoryStats();
@@ -409,6 +454,7 @@ void RenderEngine::progressive_render_worker(const ProgressiveConfig& config) {
                     }
                 }
             }
+#endif
             
             if (image_output_) {
                 image_output_->update_progressive_display(data, width, height, current_samples, target_samples);
@@ -419,9 +465,27 @@ void RenderEngine::progressive_render_worker(const ProgressiveConfig& config) {
             }
         };
         
-        // Execute progressive path tracing
+        // Execute progressive path tracing with GPU support
         std::cout << "Executing progressive PathTracer with current scene configuration..." << std::endl;
+#ifdef USE_GPU
+        bool completed;
+        if (gpu_initialized_ && path_tracer_->isGPUAvailable()) {
+            std::cout << "Attempting GPU-accelerated progressive rendering..." << std::endl;
+            
+            // GPU operations must run in main thread, so we do progressive GPU renders step by step
+            std::cout << "GPU progressive rendering requires main thread context - using CPU fallback" << std::endl;
+            std::cout << "Note: Use 'U' key for single-shot main thread GPU rendering" << std::endl;
+            
+            // Fallback to CPU progressive rendering
+            std::cout << "Using CPU progressive rendering" << std::endl;
+            completed = path_tracer_->trace_progressive(render_width_, render_height_, config, progressive_callback);
+        } else {
+            std::cout << "Using CPU progressive rendering" << std::endl;
+            completed = path_tracer_->trace_progressive(render_width_, render_height_, config, progressive_callback);
+        }
+#else
         bool completed = path_tracer_->trace_progressive(render_width_, render_height_, config, progressive_callback);
+#endif
         
         // Check if we were stopped during rendering
         if (stop_requested_ || !completed) {
@@ -508,6 +572,7 @@ void RenderEngine::synchronize_render_components() {
     }
     
     // Synchronize scene data to GPU if GPU acceleration is available
+#ifdef USE_GPU
     if (gpu_initialized_ && gpu_memory_ && scene_manager_) {
         if (!scene_manager_->isGPUSynced()) {
             auto start_time = std::chrono::high_resolution_clock::now();
@@ -520,6 +585,7 @@ void RenderEngine::synchronize_render_components() {
             std::cout << "Scene already synchronized with GPU" << std::endl;
         }
     }
+#endif
     
     std::cout << "Render components synchronized" << std::endl;
 }
@@ -590,6 +656,7 @@ bool RenderEngine::initialize_gpu() {
         
         // Create GPU memory manager
         gpu_memory_ = std::make_shared<GPUMemoryManager>();
+        gpu_memory_->enableProfiling(true); // Enable debug output
         if (!gpu_memory_->initialize()) {
             std::cerr << "Failed to initialize GPU memory manager: " << gpu_memory_->getErrorMessage() << std::endl;
             gpu_memory_.reset();
@@ -601,6 +668,17 @@ bool RenderEngine::initialize_gpu() {
         if (scene_manager_) {
             scene_manager_->setGPUMemoryManager(gpu_memory_);
             std::cout << "GPU memory manager connected to scene manager" << std::endl;
+        }
+        
+        // Initialize PathTracer GPU components
+        if (path_tracer_) {
+            std::cout << "Initializing PathTracer GPU components..." << std::endl;
+            if (!path_tracer_->initializeGPU()) {
+                std::cerr << "Failed to initialize PathTracer GPU components" << std::endl;
+                cleanup_gpu();
+                return false;
+            }
+            std::cout << "PathTracer GPU components initialized successfully" << std::endl;
         }
         
         gpu_initialized_ = true;
@@ -651,4 +729,147 @@ RenderMetrics RenderEngine::get_render_metrics() const {
     metrics.cpu_utilization = render_state_ == RenderState::RENDERING ? 80.0f : 10.0f;
     
     return metrics;
+}
+
+bool RenderEngine::render_gpu_main_thread() {
+#ifdef USE_GPU
+    if (!gpu_initialized_ || !path_tracer_ || !path_tracer_->isGPUAvailable()) {
+        std::cerr << "GPU not available for main thread rendering" << std::endl;
+        return false;
+    }
+    
+    std::cout << "=== GPU RENDERING IN MAIN THREAD ===" << std::endl;
+    
+    // Validate that we have an OpenGL context
+    SDL_GLContext currentContext = SDL_GL_GetCurrentContext();
+    if (!currentContext) {
+        std::cerr << "ERROR: No OpenGL context in main thread" << std::endl;
+        return false;
+    }
+    
+    std::cout << "Main thread has OpenGL context: " << currentContext << std::endl;
+    
+    // CRITICAL: Ensure we're using the SAME context where resources were created
+    // This completely solves the multi-context issue by forcing single-context operation
+    
+    // Capture the current context as the GPU context to ensure consistency
+    std::cout << "Capturing current context for GPU operations..." << std::endl;
+    path_tracer_->captureOpenGLContext();
+    
+    // Validate render components
+    if (!validate_render_components()) {
+        std::cerr << "Render components validation failed" << std::endl;
+        return false;
+    }
+    
+    // Synchronize components
+    synchronize_render_components();
+    
+    // Reset stop request
+    path_tracer_->reset_stop_request();
+    
+    // Perform GPU rendering - resources and operations all in same context now
+    std::cout << "Executing single-context GPU path tracing in main thread..." << std::endl;
+    bool success = path_tracer_->trace_gpu(render_width_, render_height_);
+    
+    if (success) {
+        // Process completion
+        process_render_completion();
+        std::cout << "GPU rendering completed successfully in main thread" << std::endl;
+    } else {
+        std::cerr << "GPU rendering failed in main thread" << std::endl;
+    }
+    
+    return success;
+#else
+    std::cerr << "GPU support not compiled in" << std::endl;
+    return false;
+#endif
+}
+
+bool RenderEngine::start_progressive_gpu_main_thread(const ProgressiveConfig& config) {
+#ifdef USE_GPU
+    if (!gpu_initialized_ || !path_tracer_ || !path_tracer_->isGPUAvailable()) {
+        std::cerr << "GPU not available for progressive rendering" << std::endl;
+        return false;
+    }
+    
+    std::cout << "=== GPU PROGRESSIVE RENDERING IN MAIN THREAD ===" << std::endl;
+    
+    // Validate that we have an OpenGL context
+    SDL_GLContext currentContext = SDL_GL_GetCurrentContext();
+    if (!currentContext) {
+        std::cerr << "ERROR: No OpenGL context in main thread" << std::endl;
+        return false;
+    }
+    
+    std::cout << "Main thread has OpenGL context: " << currentContext << std::endl;
+    
+    // Capture the current context as the GPU context to ensure consistency
+    std::cout << "Capturing current context for GPU progressive operations..." << std::endl;
+    path_tracer_->captureOpenGLContext();
+    
+    // Validate render components
+    if (!validate_render_components()) {
+        std::cerr << "Render components validation failed" << std::endl;
+        return false;
+    }
+    
+    // Synchronize components
+    synchronize_render_components();
+    
+    // Reset stop request
+    path_tracer_->reset_stop_request();
+    
+    // Calculate progressive sample counts
+    int currentSamples = config.initialSamples;
+    int step = 0;
+    int sampleIncrement = (config.targetSamples - config.initialSamples) / config.progressiveSteps;
+    if (sampleIncrement < 1) sampleIncrement = 1;
+    
+    std::cout << "Starting GPU progressive rendering: " << config.initialSamples 
+              << " -> " << config.targetSamples << " samples in " << config.progressiveSteps << " steps" << std::endl;
+    
+    // Progressive rendering loop
+    while (currentSamples <= config.targetSamples && step < config.progressiveSteps) {
+        std::cout << "\nGPU Progressive Step " << (step + 1) << "/" << config.progressiveSteps 
+                  << " - Rendering with " << currentSamples << " samples..." << std::endl;
+        
+        // Set the sample count for this step
+        path_tracer_->set_samples_per_pixel(currentSamples);
+        
+        // Perform GPU rendering for this step
+        bool success = path_tracer_->trace_gpu(render_width_, render_height_);
+        
+        if (!success) {
+            std::cerr << "GPU rendering failed at step " << (step + 1) << std::endl;
+            return false;
+        }
+        
+        // Process and display the result
+        process_render_completion();
+        
+        std::cout << "GPU Progressive Step " << (step + 1) << " completed successfully" << std::endl;
+        
+        // Brief pause to show progressive updates
+        if (step < config.progressiveSteps - 1) {
+            std::this_thread::sleep_for(std::chrono::milliseconds((int)(config.updateInterval * 1000)));
+        }
+        
+        // Increase sample count for next step
+        currentSamples += sampleIncrement;
+        if (currentSamples > config.targetSamples) {
+            currentSamples = config.targetSamples;
+        }
+        
+        step++;
+    }
+    
+    std::cout << "\nGPU progressive rendering completed successfully!" << std::endl;
+    return true;
+    
+#else
+    std::cerr << "GPU support not compiled in" << std::endl;
+    return false;
+#endif
 }

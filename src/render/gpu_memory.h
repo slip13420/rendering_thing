@@ -5,9 +5,11 @@
 #include <memory>
 #include <unordered_map>
 #include <string>
+#include <chrono>
 
 #ifdef USE_GPU
 #include <GL/gl.h>
+#include <GL/glext.h>
 #endif
 
 struct GPUBuffer {
@@ -44,19 +46,34 @@ enum class GPUUsagePattern {
     STREAM          // Data set once, used few times
 };
 
+// Transfer statistics structure
+struct TransferStats {
+    size_t total_bytes_transferred = 0;
+    double total_time_ms = 0.0;
+    size_t transfer_count = 0;
+    size_t total_transfers = 0;
+    double total_transfer_time_ms = 0.0;
+    double peak_transfer_time_ms = 0.0;
+    double average_transfer_time_ms = 0.0;
+};
+
 struct GPUMemoryStats {
     size_t total_allocated;
     size_t total_used;
     size_t peak_usage;
     size_t buffer_count;
+    size_t pool_count;
     float fragmentation_ratio;
+    TransferStats transfer_stats;
     
     constexpr GPUMemoryStats() noexcept
         : total_allocated(0)
         , total_used(0)
         , peak_usage(0)
         , buffer_count(0)
+        , pool_count(0)
         , fragmentation_ratio(0.0f)
+        , transfer_stats()
     {}
 };
 
@@ -106,7 +123,30 @@ public:
     
     std::string getErrorMessage() const;
     
+    // Memory pool management
+    void optimizeMemoryPools();
+    void defragmentMemoryPools();
+    void returnBufferToPool(std::shared_ptr<GPUBuffer> buffer);
+    size_t calculateOptimalPoolSize(GPUBufferType type) const;
+    
+    // Transfer optimization
+    bool transferImageData(std::shared_ptr<GPUBuffer> buffer, const std::vector<Color>& data);
+    bool readbackImageData(std::shared_ptr<GPUBuffer> buffer, std::vector<Color>& data);
+    bool transferBatched(const std::vector<std::pair<std::shared_ptr<GPUBuffer>, const void*>>& transfers);
+    
+    // Performance tracking
+    void resetTransferStats();
+    TransferStats getTransferPerformance() const;
+    
 private:
+    // Pool management methods
+    std::shared_ptr<GPUBuffer> allocateFromPool(size_t size, GPUBufferType type, GPUUsagePattern usage);
+    std::shared_ptr<GPUBuffer> allocateFromExistingPool(size_t size, GPUBufferType type, GPUUsagePattern usage);
+    void createMemoryPool(size_t buffer_size, size_t max_buffers, GPUBufferType type, GPUUsagePattern usage);
+    
+    // Performance helpers
+    void recordTransfer(size_t bytes, double time_ms);
+    std::chrono::high_resolution_clock::time_point getTimestamp() const;
     bool createGLBuffer(GPUBuffer& buffer, GPUBufferType type, GPUUsagePattern usage);
     void destroyGLBuffer(GPUBuffer& buffer);
     
@@ -118,6 +158,8 @@ private:
     void updateStats();
     void trackAllocation(size_t size);
     void trackDeallocation(size_t size);
+    void trackBufferAllocation(const std::string& buffer_name);
+    void trackBufferDeallocation(const std::string& buffer_name);
     
     bool initialized_;
     bool profiling_enabled_;
@@ -127,6 +169,26 @@ private:
     
     GPUMemoryStats stats_;
     std::string last_error_;
+    
+    // Debug and tracking members
+    bool memory_leak_detection_enabled_;
+    std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> allocation_timestamps_;
+    
+    // Missing member variables that are used in implementation
+    TransferStats transfer_stats_;
+    
+    struct MemoryPool {
+        std::vector<std::shared_ptr<GPUBuffer>> free_buffers;
+        std::vector<std::shared_ptr<GPUBuffer>> used_buffers;
+        size_t buffer_size;
+        size_t max_buffers;
+        GPUBufferType buffer_type;
+        GPUUsagePattern usage_pattern;
+        
+        MemoryPool(size_t size, size_t max_buf, GPUBufferType buf_type, GPUUsagePattern usage_pat)
+            : buffer_size(size), max_buffers(max_buf), buffer_type(buf_type), usage_pattern(usage_pat) {}
+    };
+    std::unordered_map<size_t, std::unique_ptr<MemoryPool>> memory_pools_;
     
     static constexpr size_t MAX_BUFFER_COUNT = 1024;
     static constexpr size_t MAX_MEMORY_MB = 512;

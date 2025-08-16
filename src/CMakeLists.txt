@@ -54,6 +54,9 @@ endif()
 # Link GPU libraries if GPU acceleration is enabled
 if(USE_GPU AND GPU_LIBS)
     target_link_libraries(path_tracer_renderer PRIVATE ${GPU_LIBS})
+    if(GPU_INCLUDE_DIRS)
+        target_include_directories(path_tracer_renderer PRIVATE ${GPU_INCLUDE_DIRS})
+    endif()
 endif()
 
 if(WIN32)

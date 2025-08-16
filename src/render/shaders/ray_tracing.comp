@@ -2,159 +2,151 @@
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(rgba32f, binding = 0) uniform image2D outputImage;
+layout(rgba8, binding = 0) uniform image2D outputImage;
+
 layout(std430, binding = 1) readonly buffer SceneData {
-    vec4 sphereData[]; // [center.xyz, radius, albedo.rgb, material_flags]
+    vec4 spheres[];
 };
-layout(std430, binding = 2) buffer RandomState {
+
+layout(std430, binding = 2) buffer RNGStates {
     uint rngStates[];
 };
 
+// Uniforms for camera and rendering parameters
+uniform vec3 cameraPosition;
+uniform vec3 cameraLowerLeft;
+uniform vec3 cameraHorizontal;
+uniform vec3 cameraVertical;
+uniform int maxDepth;
+uniform int samplesPerPixel;
 uniform int imageWidth;
 uniform int imageHeight;
-uniform int samplesPerPixel;
-uniform int maxDepth;
-uniform mat4 cameraTransform;
-uniform vec3 cameraPosition;
-uniform int sphereCount;
 
-// XORshift32 PRNG for GPU
-uint xorshift32(inout uint state) {
-    state ^= state << 13;
-    state ^= state >> 17;
-    state ^= state << 5;
-    return state;
+// Random number generation
+uint rngState = 1u;
+
+uint rng() {
+    rngState ^= rngState << 13;
+    rngState ^= rngState >> 17;
+    rngState ^= rngState << 5;
+    return rngState;
 }
 
-// Generate random float [0,1)
-float random(inout uint state) {
-    return float(xorshift32(state)) / 4294967296.0;
+float randomFloat() {
+    return float(rng()) / 4294967295.0;
 }
 
-// Generate random vector in unit sphere
-vec3 randomInUnitSphere(inout uint rngState) {
+vec3 randomInUnitSphere() {
     vec3 p;
     int attempts = 0;
     do {
-        p = vec3(random(rngState), random(rngState), random(rngState)) * 2.0 - 1.0;
+        p = 2.0 * vec3(randomFloat(), randomFloat(), randomFloat()) - vec3(1.0);
         attempts++;
-        if (attempts > 100) break; // Prevent infinite loops
-    } while (dot(p, p) >= 1.0);
+    } while (dot(p, p) >= 1.0 && attempts < 8);
     return p;
 }
 
-// Generate random unit vector
-vec3 randomUnitVector(inout uint rngState) {
-    return normalize(randomInUnitSphere(rngState));
+vec3 randomUnitVector() {
+    return normalize(randomInUnitSphere());
 }
 
-// Ray-sphere intersection
-bool hitSphere(vec3 center, float radius, vec3 rayOrigin, vec3 rayDirection, float tMin, float tMax, out float t, out vec3 hitPoint, out vec3 normal) {
-    vec3 oc = rayOrigin - center;
-    float a = dot(rayDirection, rayDirection);
-    float halfB = dot(oc, rayDirection);
+// Ray structure
+struct Ray {
+    vec3 origin;
+    vec3 direction;
+};
+
+vec3 rayAt(Ray ray, float t) {
+    return ray.origin + t * ray.direction;
+}
+
+// Material and hit information
+struct HitRecord {
+    vec3 point;
+    vec3 normal;
+    float t;
+    bool frontFace;
+    vec3 albedo;
+    float emission;
+};
+
+bool hitSphere(vec3 center, float radius, Ray ray, float tMin, float tMax, out HitRecord rec) {
+    vec3 oc = ray.origin - center;
+    float a = dot(ray.direction, ray.direction);
+    float halfB = dot(oc, ray.direction);
     float c = dot(oc, oc) - radius * radius;
     float discriminant = halfB * halfB - a * c;
     
-    if (discriminant < 0.0) {
-        return false;
-    }
+    if (discriminant < 0.0) return false;
     
     float sqrtd = sqrt(discriminant);
     float root = (-halfB - sqrtd) / a;
     
     if (root < tMin || tMax < root) {
         root = (-halfB + sqrtd) / a;
-        if (root < tMin || tMax < root) {
-            return false;
-        }
+        if (root < tMin || tMax < root) return false;
     }
     
-    t = root;
-    hitPoint = rayOrigin + t * rayDirection;
-    normal = (hitPoint - center) / radius;
+    rec.t = root;
+    rec.point = rayAt(ray, rec.t);
+    vec3 outwardNormal = (rec.point - center) / radius;
+    rec.frontFace = dot(ray.direction, outwardNormal) < 0.0;
+    rec.normal = rec.frontFace ? outwardNormal : -outwardNormal;
+    
     return true;
 }
 
-// Scene intersection
-bool hitScene(vec3 rayOrigin, vec3 rayDirection, float tMin, float tMax, out float closestT, out vec3 hitPoint, out vec3 normal, out vec3 albedo, out float roughness, out bool isEmissive) {
+bool hitWorld(Ray ray, float tMin, float tMax, out HitRecord rec) {
+    HitRecord tempRec;
     bool hitAnything = false;
-    closestT = tMax;
+    float closestSo = tMax;
     
-    for (int i = 0; i < sphereCount && i * 2 < sphereData.length(); i++) {
-        vec4 sphere1 = sphereData[i * 2];     // center.xyz, radius
-        vec4 sphere2 = sphereData[i * 2 + 1]; // albedo.rgb, material_flags
+    // Iterate through spheres (each sphere is 2 vec4s: center+radius, albedo+emission)
+    int sphereCount = spheres.length() / 2;
+    for (int i = 0; i < sphereCount; i++) {
+        vec4 sphereData = spheres[i * 2];
+        vec4 materialData = spheres[i * 2 + 1];
         
-        vec3 center = sphere1.xyz;
-        float radius = sphere1.w;
-        vec3 sphereAlbedo = sphere2.rgb;
-        float materialFlags = sphere2.w;
+        vec3 center = sphereData.xyz;
+        float radius = sphereData.w;
         
-        float t;
-        vec3 tempHitPoint, tempNormal;
-        
-        if (hitSphere(center, radius, rayOrigin, rayDirection, tMin, closestT, t, tempHitPoint, tempNormal)) {
+        if (hitSphere(center, radius, ray, tMin, closestSo, tempRec)) {
             hitAnything = true;
-            closestT = t;
-            hitPoint = tempHitPoint;
-            normal = tempNormal;
-            albedo = sphereAlbedo;
-            roughness = 0.5; // Default roughness
-            isEmissive = (materialFlags > 0.5); // Simple emissive check
+            closestSo = tempRec.t;
+            rec = tempRec;
+            rec.albedo = materialData.xyz;
+            rec.emission = materialData.w;
         }
     }
     
     return hitAnything;
 }
 
-// Background color calculation
-vec3 getBackgroundColor(vec3 rayDirection) {
-    vec3 unitDirection = normalize(rayDirection);
-    float t = 0.5 * (unitDirection.y + 1.0);
-    return mix(vec3(1.0, 1.0, 1.0), vec3(0.5, 0.7, 1.0), t);
-}
-
-// Vector reflection
-vec3 reflect(vec3 v, vec3 n) {
-    return v - 2.0 * dot(v, n) * n;
-}
-
-// Iterative ray color calculation (GPU-friendly)
-vec3 rayColor(vec3 rayOrigin, vec3 rayDirection, inout uint rngState) {
-    vec3 color = vec3(1.0);
-    vec3 currentOrigin = rayOrigin;
-    vec3 currentDirection = rayDirection;
+// Non-recursive ray color using iterative approach
+vec3 rayColor(Ray initialRay) {
+    vec3 color = vec3(0.0);
+    vec3 attenuation = vec3(1.0);
+    Ray ray = initialRay;
     
     for (int depth = 0; depth < maxDepth; depth++) {
-        float t;
-        vec3 hitPoint, normal, albedo;
-        float roughness;
-        bool isEmissive;
-        
-        if (hitScene(currentOrigin, currentDirection, 0.001, 1000000.0, t, hitPoint, normal, albedo, roughness, isEmissive)) {
-            // Handle emissive materials
-            if (isEmissive) {
-                color *= albedo * 2.0; // Emission factor
+        HitRecord rec;
+        if (hitWorld(ray, 0.001, 1000000.0, rec)) {
+            // Handle emissive materials (lights)
+            if (rec.emission > 0.0) {
+                color += attenuation * rec.albedo * rec.emission;
                 break;
             }
             
-            // Diffuse/reflective scattering
-            vec3 target;
-            if (roughness > 0.5) {
-                // More diffuse
-                target = hitPoint + normal + randomUnitVector(rngState);
-            } else {
-                // More reflective
-                vec3 reflected = reflect(currentDirection, normal);
-                target = hitPoint + reflected + randomInUnitSphere(rngState) * roughness;
-            }
-            
-            color *= albedo;
-            currentOrigin = hitPoint;
-            currentDirection = normalize(target - hitPoint);
+            // Lambertian scattering
+            attenuation *= 0.5 * rec.albedo;
+            vec3 target = rec.point + rec.normal + randomUnitVector();
+            ray.origin = rec.point;
+            ray.direction = target - rec.point;
         } else {
-            // Background
-            color *= getBackgroundColor(currentDirection);
+            // Sky gradient
+            vec3 unitDirection = normalize(ray.direction);
+            float t = 0.5 * (unitDirection.y + 1.0);
+            color += attenuation * ((1.0 - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0));
             break;
         }
     }
@@ -164,41 +156,38 @@ vec3 rayColor(vec3 rayOrigin, vec3 rayDirection, inout uint rngState) {
 
 void main() {
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    
+    // Check bounds
     if (pixel.x >= imageWidth || pixel.y >= imageHeight) return;
     
-    uint pixelIndex = pixel.y * imageWidth + pixel.x;
-    uint rngState = rngStates[pixelIndex];
+    // Initialize RNG state for this pixel
+    int pixelIndex = pixel.y * imageWidth + pixel.x;
+    rngState = rngStates[pixelIndex];
+    if (rngState == 0u) rngState = uint(pixelIndex + 1);
     
-    vec3 finalColor = vec3(0.0);
+    vec3 color = vec3(0.0);
     
+    // Multi-sampling
     for (int s = 0; s < samplesPerPixel; s++) {
-        // Anti-aliasing jitter
-        vec2 jitter = vec2(random(rngState), random(rngState));
-        vec2 uv = (vec2(pixel) + jitter) / vec2(imageWidth, imageHeight);
+        // Anti-aliasing with random sampling
+        float u = (float(pixel.x) + randomFloat()) / float(imageWidth);
+        float v = (float(pixel.y) + randomFloat()) / float(imageHeight);
         
-        // Transform UV to normalized device coordinates
-        vec2 ndc = uv * 2.0 - 1.0;
+        // Generate ray using GPU camera model
+        Ray ray;
+        ray.origin = cameraPosition;
+        ray.direction = cameraLowerLeft + u * cameraHorizontal + v * cameraVertical - cameraPosition;
         
-        // Calculate ray from camera
-        vec3 rayOrigin = cameraPosition;
-        vec4 worldPos = cameraTransform * vec4(ndc.x, ndc.y, -1.0, 1.0);
-        vec3 rayDirection = normalize(worldPos.xyz - rayOrigin);
-        
-        finalColor += rayColor(rayOrigin, rayDirection, rngState);
+        color += rayColor(ray);
     }
     
-    // Average the samples
-    finalColor /= float(samplesPerPixel);
+    // Average the samples and gamma correct
+    color /= float(samplesPerPixel);
+    color = sqrt(color); // Simple gamma correction
     
-    // Gamma correction (gamma=2.0)
-    finalColor = sqrt(finalColor);
-    
-    // Clamp to valid range
-    finalColor = clamp(finalColor, 0.0, 1.0);
-    
-    // Store result
-    imageStore(outputImage, pixel, vec4(finalColor, 1.0));
-    
-    // Update RNG state
+    // Store the updated RNG state
     rngStates[pixelIndex] = rngState;
+    
+    // Output final color
+    imageStore(outputImage, pixel, vec4(color, 1.0));
 }
