@@ -302,10 +302,7 @@ std::shared_ptr<GPUBuffer> GPUMemoryManager::allocateBuffer(
     trackBufferAllocation(buffer->name);
     updateStats();
     
-    if (profiling_enabled_) {
-        std::cout << "Allocated GPU buffer: " << buffer->name 
-                  << " (" << size << " bytes, type=" << static_cast<int>(type) << ")" << std::endl;
-    }
+    // GPU buffer allocation logging removed for cleaner output
     
     return buffer;
 }
@@ -337,10 +334,7 @@ bool GPUMemoryManager::deallocateBuffer(std::shared_ptr<GPUBuffer> buffer) {
     allocated_buffers_.erase(it);
     updateStats();
     
-    if (profiling_enabled_) {
-        std::cout << "Deallocated GPU buffer: " << buffer->name 
-                  << " (" << buffer->size << " bytes)" << std::endl;
-    }
+    // GPU buffer deallocation logging removed for cleaner output
     
     return true;
 }
@@ -364,9 +358,7 @@ void GPUMemoryManager::deallocateAll() {
     stats_ = GPUMemoryStats();
     transfer_stats_ = TransferStats();
     
-    if (profiling_enabled_) {
-        std::cout << "Deallocated all GPU buffers and cleared memory pools" << std::endl;
-    }
+    // GPU deallocation completion logging removed for cleaner output
 }
 
 bool GPUMemoryManager::transferToGPU(std::shared_ptr<GPUBuffer> buffer, const void* data, size_t size, size_t offset) {
@@ -394,9 +386,7 @@ bool GPUMemoryManager::transferToGPU(std::shared_ptr<GPUBuffer> buffer, const vo
     
     call_glBindBuffer(buffer->target, 0);
     
-    if (profiling_enabled_) {
-        std::cout << "Transferred " << size << " bytes to GPU buffer: " << buffer->name << std::endl;
-    }
+    // GPU buffer transfer logging removed for cleaner output
     
     return true;
 #else
@@ -555,16 +545,12 @@ std::string GPUMemoryManager::getErrorMessage() const {
 
 bool GPUMemoryManager::createGLBuffer(GPUBuffer& buffer, GPUBufferType type, GPUUsagePattern usage) {
 #ifdef USE_GPU
-    if (profiling_enabled_) {
-        std::cout << "Creating GL buffer: size=" << buffer.size << ", type=" << static_cast<int>(type) << std::endl;
-    }
+    // GL buffer creation logging removed for cleaner output
     
     buffer.target = getGLTarget(type);
     buffer.usage = getGLUsage(usage);
     
-    if (profiling_enabled_) {
-        std::cout << "GL buffer target=" << buffer.target << ", usage=" << buffer.usage << std::endl;
-    }
+    // GL buffer target/usage logging removed for cleaner output
     
     // Check if we have a valid OpenGL context and ensure it's current
     // Clear any previous OpenGL errors first  
@@ -577,21 +563,15 @@ bool GPUMemoryManager::createGLBuffer(GPUBuffer& buffer, GPUBufferType type, GPU
         std::cerr << "ERROR: " << last_error_ << std::endl;
         return false;
     } else {
-        if (profiling_enabled_) {
-            std::cout << "OpenGL context is current: " << current_context << std::endl;
-        }
+        // OpenGL context status logging removed for cleaner output
     }
     
     // Load OpenGL functions - always check if they're actually available
     if (!glGenBuffers_ptr || !glDeleteBuffers_ptr || !glBindBuffer_ptr || !glBufferData_ptr || 
         !glGenTextures_ptr || !glBindTexture_ptr || !glGetTexImage_ptr) {
-        if (profiling_enabled_) {
-            std::cout << "OpenGL functions need loading..." << std::endl;
-        }
+        // OpenGL function loading logging removed for cleaner output
         if (loadOpenGLFunctions()) {
-            if (profiling_enabled_) {
-                std::cout << "OpenGL functions loaded successfully" << std::endl;
-            }
+            // OpenGL function loading success logging removed for cleaner output
         } else {
             last_error_ = "Failed to load OpenGL functions";
             std::cerr << "ERROR: " << last_error_ << std::endl;
@@ -602,25 +582,10 @@ bool GPUMemoryManager::createGLBuffer(GPUBuffer& buffer, GPUBufferType type, GPU
             return false;
         }
     } else {
-        if (profiling_enabled_) {
-            std::cout << "OpenGL functions already loaded" << std::endl;
-        }
+        // OpenGL functions status logging removed for cleaner output
     }
     
-    // Check OpenGL context and version info
-    if (profiling_enabled_) {
-        std::cout << "Attempting GPU buffer creation..." << std::endl;
-        
-        // Check OpenGL version and extensions
-        const char* version = (const char*)call_glGetString(GL_VERSION);
-        const char* renderer = (const char*)call_glGetString(GL_RENDERER);
-        if (version && renderer) {
-            std::cout << "OpenGL Version: " << version << std::endl;
-            std::cout << "OpenGL Renderer: " << renderer << std::endl;
-        } else {
-            std::cout << "WARNING: Could not get OpenGL version info" << std::endl;
-        }
-    }
+    // OpenGL version and context validation logging removed for cleaner output
     
     call_glGenBuffers(1, &buffer.id);
     GLenum gen_error = call_glGetError();
@@ -633,9 +598,7 @@ bool GPUMemoryManager::createGLBuffer(GPUBuffer& buffer, GPUBufferType type, GPU
         return false;
     }
     
-    if (profiling_enabled_) {
-        std::cout << "Generated GL buffer ID: " << buffer.id << std::endl;
-    }
+    // GL buffer ID generation logging removed for cleaner output
     
     call_glBindBuffer(buffer.target, buffer.id);
     GLenum bind_error = call_glGetError();
@@ -665,9 +628,7 @@ bool GPUMemoryManager::createGLBuffer(GPUBuffer& buffer, GPUBufferType type, GPU
     
     call_glBindBuffer(buffer.target, 0);
     
-    if (profiling_enabled_) {
-        std::cout << "GL buffer created successfully: ID=" << buffer.id << std::endl;
-    }
+    // GL buffer creation success logging removed for cleaner output
     
     return true;
 #else

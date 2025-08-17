@@ -39,13 +39,13 @@ void UIInput::processEvents() {
             if (event.button.button == SDL_BUTTON_RIGHT) {
                 mouse_captured_ = true;
                 SDL_SetRelativeMouseMode(SDL_TRUE);
-                std::cout << "Right mouse button pressed - mouse look enabled" << std::endl;
+                // Mouse look enable logging removed for cleaner output
             }
         } else if (event.type == SDL_MOUSEBUTTONUP) {
             if (event.button.button == SDL_BUTTON_RIGHT) {
                 mouse_captured_ = false;
                 SDL_SetRelativeMouseMode(SDL_FALSE);
-                std::cout << "Right mouse button released - mouse look disabled" << std::endl;
+                // Mouse look disable logging removed for cleaner output
             }
         } else if (event.type == SDL_MOUSEMOTION) {
             if (mouse_captured_) {
@@ -310,7 +310,7 @@ void UIInput::handle_realtime_camera_input(int keycode) {
                     std::cout << "Attempting GPU progressive rendering (1->2000 samples, 12 steps)..." << std::endl;
                     bool success = render_engine_->start_progressive_gpu_main_thread(config);
                     if (success) {
-                        std::cout << "GPU progressive rendering completed successfully!" << std::endl;
+                        // GPU progressive completion logging removed for cleaner output
                     } else {
                         std::cout << "GPU progressive rendering failed, falling back to CPU..." << std::endl;
                         // Fallback to CPU progressive

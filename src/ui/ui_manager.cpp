@@ -100,7 +100,6 @@ void UIManager::process_input() {
 
 void UIManager::render_start_button() {
     if (!render_engine_) {
-        std::cout << "[Start Render Button: DISABLED - No render engine]" << std::endl;
         return;
     }
     
@@ -109,31 +108,21 @@ void UIManager::render_start_button() {
                     current_render_state_ == RenderState::STOPPED ||
                     current_render_state_ == RenderState::ERROR);
     
-    std::cout << "[Start Render Button: " << (enabled ? "ENABLED" : "DISABLED") << "]" << std::endl;
-    
-    if (enabled) {
-        std::cout << "  Click to start rendering" << std::endl;
-    }
+    // Start button logic without verbose output
 }
 
 void UIManager::render_stop_button() {
     if (!render_engine_) {
-        std::cout << "[Stop Render Button: DISABLED - No render engine]" << std::endl;
         return;
     }
     
     bool enabled = (current_render_state_ == RenderState::RENDERING);
     
-    std::cout << "[Stop Render Button: " << (enabled ? "ENABLED" : "DISABLED") << "]" << std::endl;
-    
-    if (enabled) {
-        std::cout << "  Click to stop rendering" << std::endl;
-    }
+    // Stop button logic without verbose output
 }
 
 void UIManager::render_status_display() {
-    std::string status_text = get_render_state_text(current_render_state_);
-    std::cout << "[Render Status: " << status_text << "]" << std::endl;
+    // Status display without verbose output
 }
 
 std::string UIManager::get_render_state_text(RenderState state) const {
@@ -149,7 +138,6 @@ std::string UIManager::get_render_state_text(RenderState state) const {
 
 void UIManager::on_render_state_changed(RenderState state) {
     current_render_state_ = state;
-    std::cout << "Render state changed to: " << get_render_state_text(state) << std::endl;
     
     // Reset progress when starting new render
     if (state == RenderState::RENDERING) {
@@ -237,13 +225,7 @@ void UIManager::render_progressive_controls() {
     
     bool is_progressive = render_engine_->is_progressive_rendering();
     
-    std::cout << "[Progressive Rendering: " << (is_progressive ? "ACTIVE" : "INACTIVE") << "]" << std::endl;
-    
-    if (current_render_state_ == RenderState::IDLE || 
-        current_render_state_ == RenderState::COMPLETED ||
-        current_render_state_ == RenderState::STOPPED) {
-        std::cout << "  Available: Start Progressive Render" << std::endl;
-    }
+    // Progressive controls without verbose output
 }
 
 std::string UIManager::format_time(float seconds) const {
@@ -268,19 +250,14 @@ std::string UIManager::format_time(float seconds) const {
 
 void UIManager::render_save_button() {
     if (!image_output_) {
-        std::cout << "[Save Button: DISABLED - No image output]" << std::endl;
         return;
     }
     
     bool enabled = is_save_enabled();
     
-    std::cout << "[Save Button: " << (enabled ? "ENABLED" : "DISABLED") << "]" << std::endl;
+    // Save button logic without verbose output
     
-    if (enabled) {
-        std::cout << "  Click to save rendered image" << std::endl;
-    } else if (current_render_state_ == RenderState::RENDERING) {
-        std::cout << "  Save will be available after render completes" << std::endl;
-    }
+    // Save button behavior without verbose output
 }
 
 bool UIManager::is_save_enabled() const {

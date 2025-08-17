@@ -115,7 +115,7 @@ void ImageOutput::display_to_screen() {
         }
     }
     update_window();
-    std::cout << "Image displayed in SDL window: " << width_ << "x" << height_ << std::endl;
+    // Image displayed in SDL window without verbose output
 #else
     std::cout << "Image rendered: " << width_ << "x" << height_ 
               << " (" << image_data_.size() << " pixels)" << std::endl;
@@ -179,10 +179,7 @@ void ImageOutput::update_progressive_display(const std::vector<Color>& data, int
         // Signal main thread that progressive update is ready
         progressive_update_pending_ = true;
         
-        if (current_samples == target_samples || significant_progress) {
-            std::cout << "Progressive update: " << current_samples << "/" << target_samples 
-                      << " samples (" << int(100 * progress_percent) << "%)" << std::endl;
-        }
+        // Progressive update percentage logging removed for cleaner output
         
         last_display_update = now;
         if (significant_progress) {

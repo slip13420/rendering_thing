@@ -535,7 +535,7 @@ bool PathTracer::compileRayTracingShader() {
     
     // Read shader source from file
     std::string shaderPath = "/home/chad/git/new_renderer/src/render/shaders/ray_tracing.comp";
-    std::cout << "Loading shader from: " << shaderPath << std::endl;
+    // Shader loading logging removed for cleaner output
     std::ifstream shaderFile(shaderPath);
     if (!shaderFile.is_open()) {
         std::cerr << "Failed to open ray tracing shader file: " << shaderPath << std::endl;
@@ -546,8 +546,8 @@ bool PathTracer::compileRayTracingShader() {
     shaderStream << shaderFile.rdbuf();
     std::string shaderSource = shaderStream.str();
     
-    std::cout << "Shader source loaded, length: " << shaderSource.length() << " characters" << std::endl;
-    std::cout << "First 200 chars: " << shaderSource.substr(0, 200) << std::endl;
+    // Shader source logging removed for cleaner output
+    // Shader source preview logging removed for cleaner output
     shaderFile.close();
     
     // Compile shader
@@ -565,12 +565,12 @@ bool PathTracer::compileRayTracingShader() {
     // Store the program handle for later use
     rayTracingProgram_ = gpuPipeline_->getProgramHandle();
     
-    std::cout << "Ray tracing shader compiled and linked successfully" << std::endl;
+    // Shader compilation logging removed for cleaner output
     return true;
 }
 
 bool PathTracer::trace_gpu(int width, int height) {
-    std::cout << "=== ATTEMPTING GPU PATH TRACING ===" << std::endl;
+    // GPU path tracing attempt logging removed for cleaner output
     if (!isGPUAvailable()) {
         std::cerr << "GPU not available for ray tracing" << std::endl;
         return false;
@@ -578,7 +578,7 @@ bool PathTracer::trace_gpu(int width, int height) {
     
     // CRITICAL: Ensure ALL GPU operations happen in same context
     // Recompile shader in current context to fix context mismatch
-    std::cout << "Ensuring shader program is valid in current context..." << std::endl;
+    // Shader validation logging removed for cleaner output
     SDL_GLContext currentContext = SDL_GL_GetCurrentContext();
     if (!currentContext) {
         std::cerr << "ERROR: GPU operations require OpenGL context (none current)" << std::endl;
@@ -586,17 +586,16 @@ bool PathTracer::trace_gpu(int width, int height) {
         return false;
     }
     
-    std::cout << "Starting GPU path tracing (" << width << "x" << height << ", " 
-              << samples_per_pixel_ << " samples per pixel)" << std::endl;
-    std::cout << "Running in main thread with OpenGL context: " << currentContext << std::endl;
+    // GPU path tracing start logging removed for cleaner output
+    // OpenGL context logging removed for cleaner output
     
     // CRITICAL: Recompile shader in current context to fix multi-context issues
-    std::cout << "Recompiling shader in current context to ensure compatibility..." << std::endl;
+    // Shader recompilation logging removed for cleaner output
     if (!compileRayTracingShader()) {
         std::cerr << "Failed to recompile shader in current context" << std::endl;
         return false;
     }
-    std::cout << "Shader recompiled successfully in current context" << std::endl;
+    // Shader recompilation success logging removed for cleaner output
     
     auto start_time = std::chrono::steady_clock::now();
     
@@ -611,32 +610,32 @@ bool PathTracer::trace_gpu(int width, int height) {
     // For now, reuse existing buffers - could optimize to resize if needed
     
     // CRITICAL: Prepare scene in current context to ensure buffer compatibility
-    std::cout << "Preparing scene data in current context..." << std::endl;
+    // Scene preparation logging removed for cleaner output
     if (!prepareGPUScene()) {
         std::cerr << "Failed to prepare scene in current context" << std::endl;
         return false;
     }
-    std::cout << "Scene prepared successfully in current context" << std::endl;
+    // Scene preparation logging removed for cleaner output
     
     // Dispatch GPU compute
-    std::cout << "Dispatching GPU compute..." << std::endl;
+    // GPU compute dispatch logging removed for cleaner output
     if (!dispatchGPUCompute(width, height, samples_per_pixel_)) {
         std::cerr << "Failed to dispatch GPU compute" << std::endl;
         return false;
     }
-    std::cout << "GPU compute dispatch completed" << std::endl;
+    // GPU dispatch completion logging removed for cleaner output
     
     // Read back results
-    std::cout << "Reading back GPU results..." << std::endl;
+    // GPU readback logging removed for cleaner output
     if (!readbackGPUResult(width, height)) {
         std::cerr << "Failed to read back GPU results" << std::endl;
         return false;
     }
-    std::cout << "GPU result readback completed" << std::endl;
+    // GPU readback logging removed for cleaner output
     
     auto end_time = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    std::cout << "GPU path tracing completed in " << duration.count() << " ms" << std::endl;
+    // GPU timing logging removed for cleaner output
     
     return true;
 }
@@ -741,7 +740,7 @@ bool PathTracer::prepareGPUScene() {
         return false;
     }
     
-    std::cout << "Scene data prepared for GPU (" << sceneData.size() / 12 << " primitives: 5 spheres + 1 cube)" << std::endl;
+    // Scene preparation logging removed for cleaner output
     return true;
 }
 
@@ -757,30 +756,30 @@ bool PathTracer::dispatchGPUCompute(int width, int height, int samples) {
     }
     
     // Ensure OpenGL context is current before texture operations
-    std::cout << "Ensuring OpenGL context is current for GPU operations..." << std::endl;
+    // GPU context validation logging removed for cleaner output
     
     // Check current context status
     SDL_GLContext currentContext = SDL_GL_GetCurrentContext();
-    std::cout << "Current context: " << currentContext << std::endl;
-    std::cout << "Stored context: " << gl_context_ << std::endl;
+    // Context status logging removed for cleaner output
+    // Stored context logging removed for cleaner output
     
     // Try to force context current using the simple approach
     if (!currentContext && gl_window_ && gl_context_) {
-        std::cout << "No current context, attempting simple activation..." << std::endl;
+        // Context activation attempt logging removed for cleaner output
         if (SDL_GL_MakeCurrent(gl_window_, gl_context_) == 0) {
-            std::cout << "Context activation successful!" << std::endl;
+            // Context activation success logging removed for cleaner output
         } else {
             std::cout << "Context activation failed: " << SDL_GetError() << std::endl;
             std::cout << "Proceeding anyway - may work if context is implicitly available" << std::endl;
         }
     } else if (currentContext) {
-        std::cout << "Context is already current: " << currentContext << std::endl;
+        // Context current status logging removed for cleaner output
     } else {
         std::cout << "No stored context available, proceeding with current state" << std::endl;
     }
     
     // Create texture fresh for this render to avoid context issues
-    std::cout << "Creating fresh texture for " << width << "x" << height << " render" << std::endl;
+    // Texture creation logging removed for cleaner output
     
     // Clean up any existing texture first
     if (outputTexture_ != 0) {
@@ -794,7 +793,7 @@ bool PathTracer::dispatchGPUCompute(int width, int height, int samples) {
         std::cerr << "ERROR: Failed to create fresh texture!" << std::endl;
         return false;
     }
-    std::cout << "Created fresh texture ID: " << outputTexture_ << std::endl;
+    // Texture ID logging removed for cleaner output
     
     // Bind and configure immediately in same context
     safe_glBindTexture(GL_TEXTURE_2D, outputTexture_);
@@ -807,17 +806,17 @@ bool PathTracer::dispatchGPUCompute(int width, int height, int samples) {
     
     // Verify texture is valid
     GLboolean isValid = glIsTexture(outputTexture_);
-    std::cout << "Fresh texture " << outputTexture_ << " is valid: " << (isValid ? "YES" : "NO") << std::endl;
+    // Texture validation logging removed for cleaner output
     
     if (!isValid) {
         std::cerr << "ERROR: Fresh texture creation failed!" << std::endl;
         return false;
     }
     
-    std::cout << "Fresh texture created and configured successfully" << std::endl;
+    // Texture configuration logging removed for cleaner output
     
     // Bind compute shader program
-    std::cout << "Activating compute shader program: " << rayTracingProgram_ << std::endl;
+    // Shader activation logging removed for cleaner output
     
     // Simple validation - check if program ID is valid
     if (rayTracingProgram_ == 0) {
@@ -825,7 +824,7 @@ bool PathTracer::dispatchGPUCompute(int width, int height, int samples) {
         return false;
     }
     
-    std::cout << "Shader program ID appears valid: " << rayTracingProgram_ << std::endl;
+    // Shader validation logging removed for cleaner output
     
     glUseProgram(rayTracingProgram_);
     
@@ -837,13 +836,13 @@ bool PathTracer::dispatchGPUCompute(int width, int height, int samples) {
         return false;
     }
     
-    std::cout << "Shader program activated successfully" << std::endl;
+    // Shader activation success logging removed for cleaner output
     
     // Proceed directly to image binding (texture was already validated during config)
-    std::cout << "Proceeding to bind texture " << outputTexture_ << " as image texture" << std::endl;
+    // Texture binding logging removed for cleaner output
     
     // Bind output texture with debug info
-    std::cout << "Binding image texture ID " << outputTexture_ << " to unit 0" << std::endl;
+    // Image texture binding logging removed for cleaner output
     glBindImageTexture(0, outputTexture_, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);
     
     // Check for OpenGL errors after image binding
@@ -852,7 +851,7 @@ bool PathTracer::dispatchGPUCompute(int width, int height, int samples) {
         std::cerr << "OpenGL error after binding image texture: " << error << std::endl;
         return false;
     }
-    std::cout << "Image texture bound successfully to unit 0" << std::endl;
+    // Image texture bind success logging removed for cleaner output
     
     // Bind scene data buffer
     gpuMemory_->bindBuffer(sceneBuffer_, 1);
@@ -869,7 +868,7 @@ bool PathTracer::dispatchGPUCompute(int width, int height, int samples) {
     int workGroupsY = (height + LOCAL_SIZE - 1) / LOCAL_SIZE;
     
     // Dispatch compute shader
-    std::cout << "Dispatching compute shader with " << workGroupsX << "x" << workGroupsY << " work groups" << std::endl;
+    // Compute dispatch logging removed for cleaner output
     
     // Check for errors before dispatch
     error = glGetError();
@@ -899,7 +898,7 @@ bool PathTracer::dispatchGPUCompute(int width, int height, int samples) {
     // Additional sync
     glFinish();
     
-    std::cout << "GPU compute dispatched: " << workGroupsX << "x" << workGroupsY << " work groups" << std::endl;
+    // GPU dispatch completion logging removed for cleaner output
     return true;
 }
 
@@ -921,11 +920,11 @@ void PathTracer::updateGPUUniforms(int width, int height, int samples) {
     Vector3 vertical = camera_.get_vertical();
     
     // Debug camera uniforms
-    std::cout << "Setting GPU camera uniforms:" << std::endl;
-    std::cout << "  Position: (" << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
-    std::cout << "  LowerLeft: (" << lower_left.x << ", " << lower_left.y << ", " << lower_left.z << ")" << std::endl;
-    std::cout << "  Horizontal: (" << horizontal.x << ", " << horizontal.y << ", " << horizontal.z << ")" << std::endl;
-    std::cout << "  Vertical: (" << vertical.x << ", " << vertical.y << ", " << vertical.z << ")" << std::endl;
+    // GPU camera uniform logging removed for cleaner output
+    // Camera position logging removed for cleaner output
+    // Camera lower left logging removed for cleaner output
+    // Camera horizontal logging removed for cleaner output
+    // Camera vertical logging removed for cleaner output
     
     glUniform3f(glGetUniformLocation(rayTracingProgram_, "cameraLowerLeft"), lower_left.x, lower_left.y, lower_left.z);
     glUniform3f(glGetUniformLocation(rayTracingProgram_, "cameraHorizontal"), horizontal.x, horizontal.y, horizontal.z);
@@ -938,31 +937,23 @@ bool PathTracer::readbackGPUResult(int width, int height) {
         return false;
     }
     
-    std::cout << "Reading back from texture ID: " << outputTexture_ << std::endl;
+    // Texture readback logging removed for cleaner output
     
     // Resize image data buffer
     image_data_.resize(width * height);
     std::vector<float> tempData(width * height * 4); // RGBA
     
     // Read texture data using safe wrapper functions
-    std::cout << "Binding texture for readback..." << std::endl;
+    // Texture binding for readback logging removed for cleaner output
     safe_glBindTexture(GL_TEXTURE_2D, outputTexture_);
     
-    std::cout << "Getting texture image data..." << std::endl;
+    // Texture data retrieval logging removed for cleaner output
     safe_glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, tempData.data());
     
-    std::cout << "Unbinding texture..." << std::endl;
+    // Texture unbinding logging removed for cleaner output
     safe_glBindTexture(GL_TEXTURE_2D, 0);
     
-    // Debug: Check first few pixels
-    std::cout << "GPU readback debugging - first 5 pixels:" << std::endl;
-    for (int i = 0; i < std::min(5, width * height); ++i) {
-        float r = tempData[i * 4 + 0];
-        float g = tempData[i * 4 + 1];
-        float b = tempData[i * 4 + 2];
-        float a = tempData[i * 4 + 3];
-        std::cout << "Pixel " << i << ": R=" << r << " G=" << g << " B=" << b << " A=" << a << std::endl;
-    }
+    // Pixel debugging removed for cleaner output
     
     // Convert RGBA float to Color with vertical flip
     // OpenGL textures have (0,0) at bottom-left, but we need (0,0) at top-left
@@ -979,7 +970,7 @@ bool PathTracer::readbackGPUResult(int width, int height) {
         }
     }
     
-    std::cout << "GPU result read back successfully" << std::endl;
+    // GPU readback success logging removed for cleaner output
     return true;
 }
 
