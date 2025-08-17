@@ -60,19 +60,55 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
         
         std::cout << "Application initialized successfully!" << std::endl;
         
-        // Configure rendering settings for real-time interaction
-        render_engine->set_render_size(320, 240);
-        render_engine->set_samples_per_pixel(2); // Even lower for better refresh rate
+        // Configure rendering settings based on GPU availability
+        if (render_engine->is_gpu_available()) {
+            std::cout << "GPU detected - using Full HD resolution (1920x1080)" << std::endl;
+            render_engine->set_render_size(1920, 1080);
+            render_engine->set_samples_per_pixel(4); // Reduced from 10 for faster live operations
+        } else {
+            std::cout << "No GPU - using low resolution for CPU rendering (320x240)" << std::endl;
+            render_engine->set_render_size(320, 240);
+            render_engine->set_samples_per_pixel(1); // Single sample for fast CPU performance
+        }
         render_engine->set_max_depth(3);
         render_engine->set_camera_position(Vector3(0, 2, 3), Vector3(0, 0, 0), Vector3(0, 1, 0));
         
         std::cout << "Real-Time Camera Control Mode" << std::endl;
         std::cout << "=============================" << std::endl;
         
-        // Do initial render and display
-        std::cout << "Performing initial render..." << std::endl;
+        // Create a quick preview render at moderate resolution that scales to fill window
+        std::cout << "Creating quick preview render..." << std::endl;
+        int original_samples = (render_engine->is_gpu_available()) ? 4 : 1;
+        int target_width = render_engine->is_gpu_available() ? 1920 : 320;
+        int target_height = render_engine->is_gpu_available() ? 1080 : 240;
+        
+        // Use target resolution for preview to avoid window size conflicts
+        render_engine->set_render_size(target_width, target_height);
+        render_engine->set_samples_per_pixel(1);   // Single sample for speed
+        render_engine->set_max_depth(2);           // Shallow depth for speed
         render_engine->render();
         render_engine->display_image();
+        
+        // Restore target resolution settings for responsive operation
+        render_engine->set_render_size(target_width, target_height);
+        render_engine->set_samples_per_pixel(original_samples);  // Restore samples
+        render_engine->set_max_depth(3);           // Restore normal depth
+        
+        // Now that OpenGL context is available, do a quick GPU update if possible
+        if (render_engine->is_gpu_available()) {
+            std::cout << "OpenGL context available - updating with GPU render..." << std::endl;
+            render_engine->set_samples_per_pixel(2);  // Low samples for quick update
+            bool gpu_success = render_engine->render_gpu_main_thread();
+            if (gpu_success) {
+                render_engine->display_image();
+                std::cout << "Frame updated with GPU render!" << std::endl;
+            } else {
+                std::cout << "GPU update failed, keeping CPU preview" << std::endl;
+            }
+            render_engine->set_samples_per_pixel(original_samples);  // Restore settings
+        }
+        
+        std::cout << "Application ready - press G for full quality render!" << std::endl;
         
         std::cout << "SDL window opened! Use WASD+RF keys to move camera." << std::endl;
         std::cout << "Press H for help, Q or ESC to quit." << std::endl;

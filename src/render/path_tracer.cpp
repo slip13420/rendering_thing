@@ -703,15 +703,27 @@ bool PathTracer::trace_hybrid(int width, int height, RenderMode mode) {
     } else if (mode == RenderMode::GPU_ONLY) {
         return trace_gpu(width, height);
     } else {
-        // HYBRID_AUTO - decide based on performance heuristics
+        // HYBRID_AUTO - decide based on performance heuristics AND thread context
         if (shouldUseGPU(width, height, samples_per_pixel_)) {
-            std::cout << "Hybrid mode: Attempting GPU rendering" << std::endl;
-            if (trace_gpu(width, height)) {
-                return true;
+            // Check if we have OpenGL context (i.e., we're in main thread)
+#ifdef USE_GPU
+            SDL_GLContext currentContext = SDL_GL_GetCurrentContext();
+            if (currentContext) {
+                std::cout << "Hybrid mode: Attempting GPU rendering (OpenGL context available)" << std::endl;
+                if (trace_gpu(width, height)) {
+                    return true;
+                } else {
+                    std::cout << "GPU rendering failed, falling back to CPU" << std::endl;
+                    return trace_interruptible(width, height);
+                }
             } else {
-                std::cout << "GPU rendering failed, falling back to CPU" << std::endl;
+                std::cout << "Hybrid mode: GPU selected but no OpenGL context (background thread) - using CPU" << std::endl;
                 return trace_interruptible(width, height);
             }
+#else
+            std::cout << "Hybrid mode: GPU selected but GPU support not compiled - using CPU" << std::endl;
+            return trace_interruptible(width, height);
+#endif
         } else {
             std::cout << "Hybrid mode: Using CPU for rendering" << std::endl;
             return trace_interruptible(width, height);
@@ -726,11 +738,17 @@ bool PathTracer::shouldUseGPU(int width, int height, int samples) const {
     
     // Simple heuristic: use GPU for larger images or higher sample counts
     int totalWork = width * height * samples;
-    const int GPU_THRESHOLD = 10000; // Lowered threshold for testing GPU becomes worthwhile
+    const int GPU_THRESHOLD = 50000; // Adjusted for reduced sample counts - GPU worthwhile for medium+ workloads
     
     std::cout << "GPU heuristic: totalWork=" << totalWork << ", threshold=" << GPU_THRESHOLD << std::endl;
-    std::cout << "Testing RGBA8 format - temporarily enabling GPU" << std::endl;
-    return true; // Test RGBA8 format change
+    
+    bool useGPU = totalWork > GPU_THRESHOLD;
+    if (useGPU) {
+        std::cout << "Hybrid mode: Workload exceeds threshold - attempting GPU" << std::endl;
+    } else {
+        std::cout << "Hybrid mode: Small workload - using CPU" << std::endl;
+    }
+    return useGPU;
 }
 
 bool PathTracer::prepareGPUScene() {

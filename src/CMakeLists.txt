@@ -12,10 +12,61 @@ set(SOURCES
 
 # Add GPU compute sources if GPU acceleration is enabled
 if(USE_GPU)
-    list(APPEND SOURCES render/gpu_compute.cpp render/gpu_memory.cpp render/gpu_rng.cpp)
+    list(APPEND SOURCES 
+        render/gpu_compute.cpp 
+        render/gpu_memory.cpp 
+        render/gpu_rng.cpp
+        render/gpu_performance.cpp
+        render/gpu_hardware_optimizer.cpp
+        render/hybrid_mode_selector.cpp
+        performance/gpu_benchmark.cpp
+    )
 endif()
 
 add_executable(path_tracer_renderer ${SOURCES})
+
+# Add GPU optimization test executable if GPU is enabled
+if(USE_GPU)
+    add_executable(test_gpu_optimization 
+        test_gpu_optimization.cpp
+        render/gpu_performance.cpp
+        render/gpu_hardware_optimizer.cpp
+        render/hybrid_mode_selector.cpp
+        performance/gpu_benchmark.cpp
+        render/path_tracer.cpp
+        render/gpu_compute.cpp
+        render/gpu_memory.cpp
+        render/gpu_rng.cpp
+        render/image_output.cpp
+        core/scene_manager.cpp
+        core/primitives.cpp
+        core/camera.cpp
+    )
+    
+    target_include_directories(test_gpu_optimization PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/ui
+        ${CMAKE_CURRENT_SOURCE_DIR}/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/render
+        ${CMAKE_CURRENT_SOURCE_DIR}/performance
+        ${CMAKE_CURRENT_SOURCE_DIR}/main
+        ${CMAKE_SOURCE_DIR}/include
+    )
+    
+    target_link_libraries(test_gpu_optimization PRIVATE
+        Threads::Threads
+    )
+    
+    if(WINDOWING_LIBS)
+        target_link_libraries(test_gpu_optimization PRIVATE ${WINDOWING_LIBS})
+    endif()
+    
+    if(GPU_LIBS) 
+        target_link_libraries(test_gpu_optimization PRIVATE ${GPU_LIBS})
+    endif()
+    
+    target_compile_definitions(test_gpu_optimization PRIVATE ${COMPILE_DEFINITIONS})
+endif()
 
 # Compiler-specific warning and optimization flags
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
@@ -39,6 +90,7 @@ target_include_directories(path_tracer_renderer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ui
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/render
+    ${CMAKE_CURRENT_SOURCE_DIR}/performance
     ${CMAKE_CURRENT_SOURCE_DIR}/main
     ${CMAKE_SOURCE_DIR}/include
 )

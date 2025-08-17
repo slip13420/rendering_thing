@@ -511,13 +511,13 @@ void UIInput::print_camera_controls() const {
     std::cout << "H   - Show this help" << std::endl;
     std::cout << "Q/ESC - Quit application" << std::endl;
     std::cout << "\n=== RENDER CONTROLS ===" << std::endl;
-    std::cout << "G   - Start standard rendering" << std::endl;
+    std::cout << "G   - Quick render (4 samples GPU, 1 sample CPU)" << std::endl;
     std::cout << "U   - GPU rendering in main thread (test)" << std::endl;
-    std::cout << "M   - Start progressive rendering (1->2000 samples, non-blocking)" << std::endl;
+    std::cout << "M   - Progressive high-quality render (1->2000 samples)" << std::endl;
     std::cout << "T   - Stop/cancel rendering" << std::endl;
     std::cout << "X   - Cancel progressive rendering" << std::endl;
     std::cout << "V   - Save rendered image (after completion)" << std::endl;
-    std::cout << "\nCamera moves independently - use G to render from current position!" << std::endl;
+    std::cout << "\nCamera moves independently - use G for quick render, M for quality!" << std::endl;
     std::cout << "==================================" << std::endl;
 }
 

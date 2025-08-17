@@ -14,7 +14,7 @@
 #endif
 
 RenderEngine::RenderEngine() 
-    : initialized_(false), render_width_(800), render_height_(600),
+    : initialized_(false), render_width_(1920), render_height_(1080),
       render_state_(RenderState::IDLE), stop_requested_(false), progressive_mode_(false), manual_progressive_mode_(false),
       render_mode_(RenderMode::AUTO), gpu_initialized_(false), camera_moving_(false) {
     initialize();
@@ -39,8 +39,8 @@ void RenderEngine::initialize() {
     
     // Configure path tracer with scene manager
     path_tracer_->set_scene_manager(scene_manager_);
-    path_tracer_->set_max_depth(10);
-    path_tracer_->set_samples_per_pixel(10);
+    path_tracer_->set_max_depth(5);  // Reduced depth for faster live operations
+    path_tracer_->set_samples_per_pixel(1);  // Single sample for responsive live operations
     
     // Use camera from scene manager
     if (scene_manager_->get_camera()) {
@@ -189,34 +189,59 @@ void RenderEngine::display_image() {
 void RenderEngine::update_camera_preview(const Vector3& camera_pos, const Vector3& camera_target) {
     if (!initialized_) return;
     
+    // Throttle camera preview updates for better responsiveness
+    static auto last_preview_time = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_preview_time).count();
+    
+    // Only update preview every 50ms for responsive camera movement
+    if (elapsed < 50) {
+        // Still update camera position without rendering
+        set_camera_position(camera_pos, camera_target);
+        return;
+    }
+    last_preview_time = now;
+    
     // Signal that camera is moving
     start_camera_movement();
     
     // Update camera position in the scene
     set_camera_position(camera_pos, camera_target);
     
-    // Use immediate low-sample render for responsive preview during movement
+    // Use GPU for fast camera preview when available (main thread context)
     if (path_tracer_) {
-        // Set very low sample count for immediate feedback
-        path_tracer_->set_samples_per_pixel(2); // Very low for fast preview
+        // Use reasonable settings for good camera preview quality
+        path_tracer_->set_samples_per_pixel(2); // 2 samples for better quality
+        path_tracer_->set_max_depth(2);         // Some bounces for proper scene rendering
         
         bool success = false;
         
-        // Try GPU first if available
+        // Try GPU first since camera movement is in main thread with OpenGL context
         if (gpu_initialized_ && path_tracer_->isGPUAvailable()) {
             success = path_tracer_->trace_gpu(render_width_, render_height_);
+            if (success) {
+                std::cout << "Camera preview: GPU render completed" << std::endl;
+            }
         }
         
-        // Fallback to CPU if GPU unavailable or failed
+        // Fallback to CPU if GPU failed
         if (!success) {
-            path_tracer_->trace(render_width_, render_height_);
-            success = true; // CPU trace always succeeds (may be slow but completes)
+            // Use half resolution for CPU fallback
+            int preview_width = render_width_ / 2;
+            int preview_height = render_height_ / 2;
+            success = path_tracer_->trace_interruptible(preview_width, preview_height);
+            if (success) {
+                std::cout << "Camera preview: CPU render completed at " << preview_width << "x" << preview_height << std::endl;
+            }
         }
         
         if (success && image_output_) {
             // Update display immediately
             const auto& image_data = path_tracer_->get_image_data();
-            image_output_->set_image_data(image_data, render_width_, render_height_);
+            // Use full resolution for GPU, or preview size for CPU
+            int display_width = (gpu_initialized_ && path_tracer_->isGPUAvailable()) ? render_width_ : render_width_ / 2;
+            int display_height = (gpu_initialized_ && path_tracer_->isGPUAvailable()) ? render_height_ : render_height_ / 2;
+            image_output_->set_image_data(image_data, display_width, display_height);
             image_output_->display_to_screen();
         }
     }
@@ -756,10 +781,16 @@ bool RenderEngine::render_gpu_main_thread() {
     
     std::cout << "=== GPU RENDERING IN MAIN THREAD ===" << std::endl;
     
-    // Validate that we have an OpenGL context
+    // Ensure OpenGL context is current by asking image_output to make it current
+    if (image_output_ && !image_output_->make_context_current()) {
+        std::cerr << "ERROR: Failed to make OpenGL context current" << std::endl;
+        return false;
+    }
+    
+    // Validate that we now have an OpenGL context
     SDL_GLContext currentContext = SDL_GL_GetCurrentContext();
     if (!currentContext) {
-        std::cerr << "ERROR: No OpenGL context in main thread" << std::endl;
+        std::cerr << "ERROR: No OpenGL context in main thread after making current" << std::endl;
         return false;
     }
     
