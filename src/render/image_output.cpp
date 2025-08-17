@@ -217,7 +217,7 @@ bool ImageOutput::create_window(const std::string& title, int width, int height)
         return false;
     }
     
-    renderer_ = SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    renderer_ = SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED);
     if (!renderer_) {
         std::cerr << "SDL_CreateRenderer Error: " << SDL_GetError() << std::endl;
         SDL_DestroyWindow(window_);
@@ -294,6 +294,16 @@ void ImageOutput::update_window() {
     SDL_RenderCopy(renderer_, texture_, nullptr, &dest_rect);
     
     SDL_RenderPresent(renderer_);
+#endif
+}
+
+void ImageOutput::force_immediate_update() {
+#ifdef USE_SDL
+    // Ultra-fast update for mouse movements - skip all checks and throttling
+    if (window_open_ && texture_ && !image_data_.empty()) {
+        // Just re-present the existing rendered texture without rebuilding
+        SDL_RenderPresent(renderer_);
+    }
 #endif
 }
 

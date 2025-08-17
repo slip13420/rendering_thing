@@ -54,6 +54,9 @@ public:
     // Main thread progressive update processing
     void process_pending_progressive_updates();
     
+    // Ultra-fast display update for real-time interactions
+    void force_immediate_update();
+    
     // Window management
     bool is_window_open() const;
     void close_window();

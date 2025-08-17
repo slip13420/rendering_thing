@@ -6,15 +6,26 @@
 #include <iomanip>
 #include <sstream>
 #include <cmath>
+#include <chrono>
 
 #ifdef USE_SDL
 #include <SDL.h>
 #endif
 
 UIInput::UIInput() : quit_requested_(false), camera_move_speed_(0.5f), 
-                     mouse_sensitivity_(0.002f), mouse_captured_(false), 
+                     mouse_sensitivity_(0.004f), mouse_captured_(false), 
                      last_mouse_x_(0), last_mouse_y_(0), 
-                     camera_yaw_(-1.57f), camera_pitch_(0.0f) {  // Start looking forward (-Z)
+                     camera_yaw_(-1.57f), camera_pitch_(0.0f), use_raw_mouse_(false) {  // Start looking forward (-Z)
+    
+#ifdef USE_SDL
+    // Set SDL hints for better mouse responsiveness
+    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "1");
+    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_WARP_MOTION, "1");
+    SDL_SetHint(SDL_HINT_MOUSE_AUTO_CAPTURE, "0");
+    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SCALING, "0"); // Disable scaling
+    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SPEED_SCALE, "1.0"); // No speed scaling
+#endif
+    
     print_camera_controls();
 }
 
@@ -27,6 +38,10 @@ void UIInput::processEvents() {
     SDL_Event event;
     bool has_events = false;
     
+    // FIRST: Handle direct mouse state polling (bypass event queue entirely)
+    handle_direct_mouse_input();
+    
+    // Process all non-mouse events in the queue
     while (SDL_PollEvent(&event)) {
         has_events = true;
         if (event.type == SDL_QUIT) {
@@ -38,24 +53,34 @@ void UIInput::processEvents() {
         } else if (event.type == SDL_MOUSEBUTTONDOWN) {
             if (event.button.button == SDL_BUTTON_RIGHT) {
                 mouse_captured_ = true;
+                // Clear ALL mouse events - we're using direct polling now
+                SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
                 SDL_SetRelativeMouseMode(SDL_TRUE);
+                
+                // Get initial mouse position for delta calculation
+                SDL_GetMouseState(&last_mouse_x_, &last_mouse_y_);
+                
                 // Mouse look enable logging removed for cleaner output
             }
         } else if (event.type == SDL_MOUSEBUTTONUP) {
             if (event.button.button == SDL_BUTTON_RIGHT) {
+                // IMMEDIATE STOP
                 mouse_captured_ = false;
                 SDL_SetRelativeMouseMode(SDL_FALSE);
+                
+                // Nuclear clear - we don't want ANY events
+                for (int i = 0; i < 10; i++) {
+                    SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
+                    SDL_PumpEvents();
+                }
+                
                 // Mouse look disable logging removed for cleaner output
             }
-        } else if (event.type == SDL_MOUSEMOTION) {
-            if (mouse_captured_) {
-                handle_mouse_look(event.motion.xrel, event.motion.yrel);
-            }
         }
+        // NOTE: We're completely ignoring SDL_MOUSEMOTION events now
     }
     
-    // Always refresh the display if there were any events (including mouse)
-    // This ensures the window stays responsive to mouse/window manager events
+    // ALWAYS update display if there were any events
     if (has_events && render_engine_) {
         render_engine_->display_image();
     }
@@ -97,8 +122,7 @@ void UIInput::set_camera_position(const Vector3& position) {
             render_engine_->set_camera_position(position, target, up);
         }
         
-        std::cout << "Camera moved to: (" << std::fixed << std::setprecision(2) 
-                  << position.x << ", " << position.y << ", " << position.z << ")" << std::endl;
+        // Camera position logging removed for cleaner output
     } else {
         std::cout << "Invalid camera position!" << std::endl;
     }
@@ -365,24 +389,53 @@ void UIInput::handle_realtime_camera_input(int keycode) {
 #endif
 }
 
-void UIInput::handle_mouse_look(int delta_x, int delta_y) {
+void UIInput::handle_direct_mouse_input() {
 #ifdef USE_SDL
-    // Update camera rotation angles using relative mouse movement
-    camera_yaw_ += delta_x * mouse_sensitivity_;   // Fixed: move right = look right
-    camera_pitch_ -= delta_y * mouse_sensitivity_; // Fixed: mouse up = look up (negative pitch)
+    // Only poll if mouse is captured
+    if (!mouse_captured_) return;
     
-    // Clamp pitch to prevent camera flipping
-    const float max_pitch = 1.5f; // ~85 degrees
+    // Get current mouse position directly (no event queue)
+    int current_x, current_y;
+    SDL_GetMouseState(&current_x, &current_y);
+    
+    // Calculate deltas from last position
+    int delta_x = current_x - last_mouse_x_;
+    int delta_y = current_y - last_mouse_y_;
+    
+    // Update last position immediately
+    last_mouse_x_ = current_x;
+    last_mouse_y_ = current_y;
+    
+    // Skip tiny movements
+    if (abs(delta_x) <= 1 && abs(delta_y) <= 1) return;
+    
+    // Cap deltas to prevent jumps
+    const int max_delta = 10;
+    delta_x = std::max(-max_delta, std::min(max_delta, delta_x));
+    delta_y = std::max(-max_delta, std::min(max_delta, delta_y));
+    
+    // Apply mouse look
+    camera_yaw_ += delta_x * mouse_sensitivity_;
+    camera_pitch_ -= delta_y * mouse_sensitivity_;
+    
+    // Clamp pitch
+    const float max_pitch = 1.5f;
     if (camera_pitch_ > max_pitch) camera_pitch_ = max_pitch;
     if (camera_pitch_ < -max_pitch) camera_pitch_ = -max_pitch;
     
-    // Update camera target based on new angles
+    // Update camera and display immediately
     update_camera_target();
-    
-    // Only display existing image, don't trigger new render
-    if (render_engine_ && (abs(delta_x) > 0 || abs(delta_y) > 0)) {
+    if (render_engine_) {
         render_engine_->display_image();
     }
+#endif
+}
+
+void UIInput::handle_mouse_look(int delta_x, int delta_y) {
+#ifdef USE_SDL
+    // Legacy event-based mouse handler - now unused since we switched to direct polling
+    // Keeping for compatibility but this should never be called
+    return;
 #endif
 }
 

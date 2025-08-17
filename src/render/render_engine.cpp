@@ -237,30 +237,8 @@ void RenderEngine::stop_camera_movement() {
     camera_moving_ = false;
     last_camera_movement_ = std::chrono::steady_clock::now();
     
-    // Start a timer thread to restart progressive rendering after 1 second of no movement
-    std::thread([this]() {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        
-        // Check if camera is still not moving and no manual progressive render is active
-        if (!camera_moving_ && !manual_progressive_mode_) {
-            auto now = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_camera_movement_);
-            
-            // Only restart if it's been at least 1 second since last movement
-            if (elapsed.count() >= 1000) {
-                // Camera stopped moving - restarting progressive rendering
-                
-                // Start high-quality progressive render
-                ProgressiveConfig config;
-                config.initialSamples = 1;
-                config.targetSamples = 200;  // Medium quality for camera position
-                config.progressiveSteps = 8;
-                config.updateInterval = 0.3f;
-                
-                start_progressive_render(config);
-            }
-        }
-    }).detach();
+    // Auto-progressive rendering disabled - user can manually trigger with 'M' key
+    // This was causing unwanted CPU progressive renders after camera movement
 }
 
 void RenderEngine::start_render() {
