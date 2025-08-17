@@ -805,12 +805,28 @@ bool RenderEngine::render_gpu_main_thread() {
 
 bool RenderEngine::start_progressive_gpu_main_thread(const ProgressiveConfig& config) {
 #ifdef USE_GPU
+    // Deprecated: Use start_progressive_gpu_non_blocking for responsive UI
+    std::cout << "Warning: start_progressive_gpu_main_thread blocks UI. Use start_progressive_gpu_non_blocking instead." << std::endl;
+    return start_progressive_gpu_non_blocking(config);
+#else
+    std::cerr << "GPU support not compiled in" << std::endl;
+    return false;
+#endif
+}
+
+bool RenderEngine::start_progressive_gpu_non_blocking(const ProgressiveConfig& config) {
+#ifdef USE_GPU
     if (!gpu_initialized_ || !path_tracer_ || !path_tracer_->isGPUAvailable()) {
         std::cerr << "GPU not available for progressive rendering" << std::endl;
         return false;
     }
     
-    std::cout << "=== GPU PROGRESSIVE RENDERING IN MAIN THREAD ===" << std::endl;
+    if (progressive_gpu_state_.active) {
+        std::cerr << "Progressive GPU rendering already active" << std::endl;
+        return false;
+    }
+    
+    std::cout << "=== NON-BLOCKING GPU PROGRESSIVE RENDERING ===" << std::endl;
     
     // Validate that we have an OpenGL context
     SDL_GLContext currentContext = SDL_GL_GetCurrentContext();
@@ -818,12 +834,6 @@ bool RenderEngine::start_progressive_gpu_main_thread(const ProgressiveConfig& co
         std::cerr << "ERROR: No OpenGL context in main thread" << std::endl;
         return false;
     }
-    
-    std::cout << "Main thread has OpenGL context: " << currentContext << std::endl;
-    
-    // Capture the current context as the GPU context to ensure consistency
-    std::cout << "Capturing current context for GPU progressive operations..." << std::endl;
-    path_tracer_->captureOpenGLContext();
     
     // Validate render components
     if (!validate_render_components()) {
@@ -836,63 +846,140 @@ bool RenderEngine::start_progressive_gpu_main_thread(const ProgressiveConfig& co
     
     // Reset stop request
     path_tracer_->reset_stop_request();
+    path_tracer_->captureOpenGLContext();
     
-    // Calculate progressive sample counts
-    int currentSamples = config.initialSamples;
-    int step = 0;
-    int sampleIncrement = (config.targetSamples - config.initialSamples) / config.progressiveSteps;
-    if (sampleIncrement < 1) sampleIncrement = 1;
+    // Initialize progressive state
+    progressive_gpu_state_.active = true;
+    progressive_gpu_state_.current_step = 0;
+    progressive_gpu_state_.current_samples = config.initialSamples;
+    progressive_gpu_state_.target_samples = config.targetSamples;
+    progressive_gpu_state_.total_steps = config.progressiveSteps;
+    progressive_gpu_state_.update_interval = config.updateInterval;
+    progressive_gpu_state_.sample_increment = (config.targetSamples - config.initialSamples) / config.progressiveSteps;
+    if (progressive_gpu_state_.sample_increment < 1) progressive_gpu_state_.sample_increment = 1;
+    progressive_gpu_state_.last_step_time = std::chrono::steady_clock::now();
     
-    // Starting GPU progressive rendering
+    progressive_mode_ = true;
+    manual_progressive_mode_ = true;
+    set_render_state(RenderState::RENDERING);
     
-    // Progressive rendering loop
-    while (currentSamples <= config.targetSamples && step < config.progressiveSteps) {
-        // GPU Progressive Step rendering
-        
-        // Set the sample count for this step
-        path_tracer_->set_samples_per_pixel(currentSamples);
-        
-        // Perform GPU rendering for this step
-        bool success = path_tracer_->trace_gpu(render_width_, render_height_);
-        
-        if (!success) {
-            std::cerr << "GPU rendering failed at step " << (step + 1) << std::endl;
-            return false;
-        }
-        
-        // Process and display the result with live update
-        process_render_completion();
-        
-        // Trigger immediate display update for live progressive rendering
-        if (image_output_) {
-            const auto& image_data = path_tracer_->get_image_data();
-            image_output_->update_progressive_display(image_data, render_width_, render_height_, currentSamples, config.targetSamples);
-            
-            // Force immediate display refresh since UI event loop is blocked during GPU rendering
-            image_output_->display_to_screen();
-        }
-        
-        // GPU Progressive Step completed
-        
-        // Brief pause to show progressive updates
-        if (step < config.progressiveSteps - 1) {
-            std::this_thread::sleep_for(std::chrono::milliseconds((int)(config.updateInterval * 1000)));
-        }
-        
-        // Increase sample count for next step
-        currentSamples += sampleIncrement;
-        if (currentSamples > config.targetSamples) {
-            currentSamples = config.targetSamples;
-        }
-        
-        step++;
-    }
-    
-    // GPU progressive rendering completed
+    std::cout << "Progressive GPU rendering initialized (non-blocking mode)" << std::endl;
     return true;
     
 #else
     std::cerr << "GPU support not compiled in" << std::endl;
     return false;
 #endif
+}
+
+bool RenderEngine::step_progressive_gpu() {
+#ifdef USE_GPU
+    if (!progressive_gpu_state_.active) {
+        return false; // No progressive rendering active
+    }
+    
+    // First, check if we have pending async work to finalize
+    if (progressive_gpu_state_.waiting_for_async_completion) {
+        if (path_tracer_->is_gpu_complete()) {
+            // Async work completed - finalize and display
+            bool success = path_tracer_->finalize_gpu_result(render_width_, render_height_);
+            progressive_gpu_state_.waiting_for_async_completion = false;
+            
+            if (success) {
+                // Process and display the result
+                process_render_completion();
+                
+                if (image_output_) {
+                    const auto& image_data = path_tracer_->get_image_data();
+                    image_output_->update_progressive_display(
+                        image_data, render_width_, render_height_, 
+                        progressive_gpu_state_.current_samples, progressive_gpu_state_.target_samples
+                    );
+                    image_output_->display_to_screen();
+                }
+                
+                // Update progress callback
+                if (progress_callback_) {
+                    progress_callback_(render_width_, render_height_, 
+                                      progressive_gpu_state_.current_samples, progressive_gpu_state_.target_samples);
+                }
+                
+                // Prepare for next step
+                progressive_gpu_state_.current_step++;
+                progressive_gpu_state_.current_samples += progressive_gpu_state_.sample_increment;
+                if (progressive_gpu_state_.current_samples > progressive_gpu_state_.target_samples) {
+                    progressive_gpu_state_.current_samples = progressive_gpu_state_.target_samples;
+                }
+                progressive_gpu_state_.last_step_time = std::chrono::steady_clock::now();
+            } else {
+                std::cerr << "GPU async operation failed" << std::endl;
+                cancel_progressive_gpu();
+                return false;
+            }
+        } else {
+            // Still waiting for async completion - no new work this frame
+            return true;
+        }
+    }
+    
+    // Check if we've completed all steps
+    if (progressive_gpu_state_.current_step >= progressive_gpu_state_.total_steps || 
+        progressive_gpu_state_.current_samples >= progressive_gpu_state_.target_samples) {
+        
+        // Progressive rendering complete
+        progressive_gpu_state_.active = false;
+        progressive_mode_ = false;
+        manual_progressive_mode_ = false;
+        set_render_state(RenderState::COMPLETED);
+        std::cout << "Progressive GPU rendering completed" << std::endl;
+        return false; // No more steps
+    }
+    
+    // Check if we should delay the next step based on update interval
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed_ms = std::chrono::duration<float, std::milli>(now - progressive_gpu_state_.last_step_time).count();
+    float required_interval_ms = progressive_gpu_state_.update_interval * 1000.0f;
+    
+    if (elapsed_ms < required_interval_ms) {
+        return true; // More steps remain, but not ready yet
+    }
+    
+    // Start next progressive step
+    std::cout << "Progressive GPU step " << (progressive_gpu_state_.current_step + 1) 
+              << "/" << progressive_gpu_state_.total_steps 
+              << " (samples: " << progressive_gpu_state_.current_samples << ")" << std::endl;
+    
+    // Set sample count for this step
+    path_tracer_->set_samples_per_pixel(progressive_gpu_state_.current_samples);
+    
+    // Start async GPU work (non-blocking)
+    if (path_tracer_->start_gpu_async(render_width_, render_height_)) {
+        progressive_gpu_state_.waiting_for_async_completion = true;
+        std::cout << "GPU async work started for step " << (progressive_gpu_state_.current_step + 1) << std::endl;
+    } else {
+        std::cerr << "Failed to start async GPU work" << std::endl;
+        cancel_progressive_gpu();
+        return false;
+    }
+    
+    return true; // More steps remain
+    
+#else
+    return false;
+#endif
+}
+
+void RenderEngine::cancel_progressive_gpu() {
+    if (progressive_gpu_state_.active) {
+        progressive_gpu_state_.active = false;
+        progressive_gpu_state_.waiting_for_async_completion = false;
+        progressive_mode_ = false;
+        manual_progressive_mode_ = false;
+        set_render_state(RenderState::STOPPED);
+        std::cout << "Progressive GPU rendering cancelled" << std::endl;
+    }
+}
+
+bool RenderEngine::is_progressive_gpu_active() const {
+    return progressive_gpu_state_.active;
 }

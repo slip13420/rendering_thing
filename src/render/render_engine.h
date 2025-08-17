@@ -103,6 +103,12 @@ public:
     bool render_gpu_main_thread();
     bool start_progressive_gpu_main_thread(const ProgressiveConfig& config);
     
+    // Non-blocking progressive rendering
+    bool start_progressive_gpu_non_blocking(const ProgressiveConfig& config);
+    bool step_progressive_gpu(); // Returns true if more steps remain
+    void cancel_progressive_gpu();
+    bool is_progressive_gpu_active() const;
+    
 private:
     // Threading and state management
     void render_worker();
@@ -146,4 +152,17 @@ private:
     // Camera movement state
     std::atomic<bool> camera_moving_;
     std::chrono::steady_clock::time_point last_camera_movement_;
+    
+    // Non-blocking progressive state
+    struct ProgressiveGPUState {
+        bool active = false;
+        int current_step = 0;
+        int current_samples = 0;
+        int target_samples = 0;
+        int sample_increment = 0;
+        int total_steps = 0;
+        float update_interval = 0.1f;
+        std::chrono::steady_clock::time_point last_step_time;
+        bool waiting_for_async_completion = false;  // Tracking pending async work
+    } progressive_gpu_state_;
 };

@@ -80,9 +80,15 @@ void UIInput::processEvents() {
         // NOTE: We're completely ignoring SDL_MOUSEMOTION events now
     }
     
-    // ALWAYS update display if there were any events
+    // ALWAYS update display if there were any events, 
+    // BUT avoid interfering with active progressive GPU rendering
     if (has_events && render_engine_) {
-        render_engine_->display_image();
+        // Don't call display_image() during progressive GPU rendering as it interferes
+        // with the progressive display updates and can cause image flipping
+        if (!render_engine_->is_progressive_gpu_active()) {
+            render_engine_->display_image();
+        }
+        // If progressive rendering is active, let it handle its own display updates
     }
 #else
     // Console-based input for non-SDL builds
@@ -288,7 +294,8 @@ void UIInput::handle_realtime_camera_input(int keycode) {
             set_camera_position(Vector3(0, 2, 3));
             update_camera_target();
             // Display existing image without triggering render
-            if (render_engine_) {
+            // BUT avoid interfering with progressive GPU rendering
+            if (render_engine_ && !render_engine_->is_progressive_gpu_active()) {
                 render_engine_->display_image();
             }
             std::cout << "Camera reset to origin" << std::endl;
@@ -329,12 +336,12 @@ void UIInput::handle_realtime_camera_input(int keycode) {
                 config.progressiveSteps = 12;  // More steps for gradual quality improvement
                 config.updateInterval = 0.3f;
                 
-                // Try GPU progressive rendering first
+                // Try GPU progressive rendering first (non-blocking)
                 if (render_engine_->is_gpu_available()) {
-                    std::cout << "Attempting GPU progressive rendering (1->2000 samples, 12 steps)..." << std::endl;
-                    bool success = render_engine_->start_progressive_gpu_main_thread(config);
+                    std::cout << "Starting non-blocking GPU progressive rendering (1->2000 samples, 12 steps)..." << std::endl;
+                    bool success = render_engine_->start_progressive_gpu_non_blocking(config);
                     if (success) {
-                        // GPU progressive completion logging removed for cleaner output
+                        std::cout << "GPU progressive rendering started (non-blocking mode)" << std::endl;
                     } else {
                         std::cout << "GPU progressive rendering failed, falling back to CPU..." << std::endl;
                         // Fallback to CPU progressive
@@ -360,6 +367,18 @@ void UIInput::handle_realtime_camera_input(int keycode) {
             if (render_engine_) {
                 std::cout << "Stopping render..." << std::endl;
                 render_engine_->stop_render();
+                // Also cancel progressive GPU rendering if active
+                if (render_engine_->is_progressive_gpu_active()) {
+                    render_engine_->cancel_progressive_gpu();
+                }
+            }
+            break;
+        case SDLK_x:
+            if (render_engine_ && render_engine_->is_progressive_gpu_active()) {
+                std::cout << "X key pressed - Cancelling progressive rendering..." << std::endl;
+                render_engine_->cancel_progressive_gpu();
+            } else {
+                std::cout << "X key pressed - No progressive rendering to cancel" << std::endl;
             }
             break;
         case SDLK_v:
@@ -382,7 +401,8 @@ void UIInput::handle_realtime_camera_input(int keycode) {
         update_camera_target(); // Update target to maintain current view direction
         
         // Only display existing image, don't trigger new render
-        if (render_engine_) {
+        // BUT avoid interfering with progressive GPU rendering
+        if (render_engine_ && !render_engine_->is_progressive_gpu_active()) {
             render_engine_->display_image();
         }
     }
@@ -424,8 +444,9 @@ void UIInput::handle_direct_mouse_input() {
     if (camera_pitch_ < -max_pitch) camera_pitch_ = -max_pitch;
     
     // Update camera and display immediately
+    // BUT avoid interfering with progressive GPU rendering
     update_camera_target();
-    if (render_engine_) {
+    if (render_engine_ && !render_engine_->is_progressive_gpu_active()) {
         render_engine_->display_image();
     }
 #endif
@@ -492,8 +513,9 @@ void UIInput::print_camera_controls() const {
     std::cout << "\n=== RENDER CONTROLS ===" << std::endl;
     std::cout << "G   - Start standard rendering" << std::endl;
     std::cout << "U   - GPU rendering in main thread (test)" << std::endl;
-    std::cout << "M   - Start progressive rendering (1->2000 samples)" << std::endl;
+    std::cout << "M   - Start progressive rendering (1->2000 samples, non-blocking)" << std::endl;
     std::cout << "T   - Stop/cancel rendering" << std::endl;
+    std::cout << "X   - Cancel progressive rendering" << std::endl;
     std::cout << "V   - Save rendered image (after completion)" << std::endl;
     std::cout << "\nCamera moves independently - use G to render from current position!" << std::endl;
     std::cout << "==================================" << std::endl;

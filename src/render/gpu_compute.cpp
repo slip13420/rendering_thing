@@ -33,6 +33,26 @@
 #define GL_INFO_LOG_LENGTH 0x8B84
 #endif
 
+#ifndef GL_SYNC_GPU_COMMANDS_COMPLETE
+#define GL_SYNC_GPU_COMMANDS_COMPLETE 0x9117
+#endif
+
+#ifndef GL_ALREADY_SIGNALED
+#define GL_ALREADY_SIGNALED 0x911A
+#endif
+
+#ifndef GL_TIMEOUT_EXPIRED
+#define GL_TIMEOUT_EXPIRED 0x911B
+#endif
+
+#ifndef GL_CONDITION_SATISFIED
+#define GL_CONDITION_SATISFIED 0x911C
+#endif
+
+#ifndef GL_WAIT_FAILED
+#define GL_WAIT_FAILED 0x911D
+#endif
+
 // Declare missing OpenGL functions as extern
 extern "C" {
     void glGetIntegeri_v(unsigned int target, unsigned int index, int* data);
@@ -51,6 +71,11 @@ extern "C" {
     void glMemoryBarrier(unsigned int barriers);
     void glGetShaderInfoLog(unsigned int shader, int bufSize, int* length, char* infoLog);
     void glGetProgramInfoLog(unsigned int program, int bufSize, int* length, char* infoLog);
+    
+    // OpenGL sync functions for async operations
+    void* glFenceSync(unsigned int condition, unsigned int flags);
+    void glDeleteSync(void* sync);
+    unsigned int glClientWaitSync(void* sync, unsigned int flags, unsigned long long timeout);
 }
 
 #endif
@@ -62,6 +87,8 @@ GPUComputePipeline::GPUComputePipeline()
 #ifdef USE_GPU
     , compute_program_(0)
     , compute_shader_(0)
+    , sync_object_(0)
+    , async_operation_active_(false)
 #endif
     , max_work_group_size_(1, 1, 1)
     , current_work_group_size_(1, 1, 1)
@@ -315,6 +342,92 @@ void GPUComputePipeline::synchronize() {
         glMemoryBarrier(GL_ALL_BARRIER_BITS);
         glFinish();
     }
+#endif
+}
+
+bool GPUComputePipeline::dispatchAsync(const WorkGroupSize& work_groups) {
+    return dispatchAsync(work_groups.x, work_groups.y, work_groups.z);
+}
+
+bool GPUComputePipeline::dispatchAsync(unsigned int work_groups_x, unsigned int work_groups_y, unsigned int work_groups_z) {
+#ifdef USE_GPU
+    if (!initialized_ || !gpu_available_) {
+        last_error_ = "GPU compute pipeline not available for async dispatch";
+        return false;
+    }
+    
+    if (async_operation_active_) {
+        last_error_ = "Another async operation is already in progress";
+        return false;
+    }
+    
+    if (!validateWorkGroupSize(WorkGroupSize(work_groups_x, work_groups_y, work_groups_z))) {
+        return false;
+    }
+    
+    // Clean up any previous sync object
+    if (sync_object_ != 0) {
+        glDeleteSync((void*)sync_object_);
+        sync_object_ = 0;
+    }
+    
+    // Dispatch the compute work (non-blocking)
+    glDispatchCompute(work_groups_x, work_groups_y, work_groups_z);
+    
+    unsigned int error = glGetError();
+    if (error != GL_NO_ERROR) {
+        std::ostringstream oss;
+        oss << "OpenGL error during async dispatch: " << error;
+        last_error_ = oss.str();
+        return false;
+    }
+    
+    // Create a sync object to track completion
+    void* sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    if (sync == nullptr) {
+        last_error_ = "Failed to create GPU sync object";
+        return false;
+    }
+    
+    sync_object_ = (unsigned int)(uintptr_t)sync;
+    async_operation_active_ = true;
+    
+    return true;
+#else
+    last_error_ = "GPU support not compiled in";
+    return false;
+#endif
+}
+
+bool GPUComputePipeline::isComplete() const {
+#ifdef USE_GPU
+    if (!async_operation_active_ || sync_object_ == 0) {
+        return true; // No operation in progress
+    }
+    
+    // Check the sync object status without blocking
+    void* sync = (void*)(uintptr_t)sync_object_;
+    unsigned int result = glClientWaitSync(sync, 0, 0); // 0 timeout = immediate return
+    
+    if (result == GL_ALREADY_SIGNALED || result == GL_CONDITION_SATISFIED) {
+        // Operation is complete, clean up
+        glDeleteSync(sync);
+        const_cast<GPUComputePipeline*>(this)->sync_object_ = 0;
+        const_cast<GPUComputePipeline*>(this)->async_operation_active_ = false;
+        return true;
+    } else if (result == GL_TIMEOUT_EXPIRED) {
+        // Still working
+        return false;
+    } else {
+        // Error occurred
+        glDeleteSync(sync);
+        const_cast<GPUComputePipeline*>(this)->sync_object_ = 0;
+        const_cast<GPUComputePipeline*>(this)->async_operation_active_ = false;
+        const_cast<GPUComputePipeline*>(this)->last_error_ = "GPU sync operation failed";
+        return true; // Consider it "complete" with error
+    }
+#else
+    return true;
 #endif
 }
 

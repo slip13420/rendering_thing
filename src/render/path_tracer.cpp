@@ -570,74 +570,131 @@ bool PathTracer::compileRayTracingShader() {
 }
 
 bool PathTracer::trace_gpu(int width, int height) {
-    // GPU path tracing attempt logging removed for cleaner output
+    // Use async approach for better responsiveness
+    if (!start_gpu_async(width, height)) {
+        return false;
+    }
+    
+    // Wait for completion (blocking for backward compatibility)
+    const int MAX_WAIT_MS = 10000; // 10 second timeout
+    const int POLL_INTERVAL_MS = 10;
+    int waited_ms = 0;
+    
+    while (!is_gpu_complete() && waited_ms < MAX_WAIT_MS) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(POLL_INTERVAL_MS));
+        waited_ms += POLL_INTERVAL_MS;
+        
+        // Check for stop request during wait
+        if (stop_requested_) {
+            async_gpu_state_.active = false;
+            return false;
+        }
+    }
+    
+    if (waited_ms >= MAX_WAIT_MS) {
+        std::cerr << "GPU rendering timed out after " << MAX_WAIT_MS << "ms" << std::endl;
+        async_gpu_state_.active = false;
+        return false;
+    }
+    
+    return finalize_gpu_result(width, height);
+}
+
+bool PathTracer::start_gpu_async(int width, int height) {
+#ifdef USE_GPU
     if (!isGPUAvailable()) {
         std::cerr << "GPU not available for ray tracing" << std::endl;
         return false;
     }
     
-    // CRITICAL: Ensure ALL GPU operations happen in same context
-    // Recompile shader in current context to fix context mismatch
-    // Shader validation logging removed for cleaner output
+    if (async_gpu_state_.active) {
+        std::cerr << "GPU async operation already in progress" << std::endl;
+        return false;
+    }
+    
     SDL_GLContext currentContext = SDL_GL_GetCurrentContext();
     if (!currentContext) {
-        std::cerr << "ERROR: GPU operations require OpenGL context (none current)" << std::endl;
-        std::cerr << "GPU operations must be called from main thread with active OpenGL context" << std::endl;
+        std::cerr << "ERROR: GPU operations require OpenGL context" << std::endl;
         return false;
     }
     
-    // GPU path tracing start logging removed for cleaner output
-    // OpenGL context logging removed for cleaner output
-    
-    // CRITICAL: Recompile shader in current context to fix multi-context issues
-    // Shader recompilation logging removed for cleaner output
+    // Prepare for async operation
     if (!compileRayTracingShader()) {
-        std::cerr << "Failed to recompile shader in current context" << std::endl;
+        std::cerr << "Failed to compile shader" << std::endl;
         return false;
     }
-    // Shader recompilation success logging removed for cleaner output
     
-    auto start_time = std::chrono::steady_clock::now();
-    
-    // GPU RNG should already be initialized and allocated in main thread
-    // Just verify it's ready for this resolution
     if (!gpuRNG_->isInitialized()) {
         std::cerr << "GPU RNG not initialized" << std::endl;
         return false;
     }
     
-    // Check if we need to resize for this resolution
-    // For now, reuse existing buffers - could optimize to resize if needed
-    
-    // CRITICAL: Prepare scene in current context to ensure buffer compatibility
-    // Scene preparation logging removed for cleaner output
     if (!prepareGPUScene()) {
-        std::cerr << "Failed to prepare scene in current context" << std::endl;
+        std::cerr << "Failed to prepare scene" << std::endl;
         return false;
     }
-    // Scene preparation logging removed for cleaner output
     
-    // Dispatch GPU compute
-    // GPU compute dispatch logging removed for cleaner output
-    if (!dispatchGPUCompute(width, height, samples_per_pixel_)) {
-        std::cerr << "Failed to dispatch GPU compute" << std::endl;
+    // Start async GPU work
+    if (!dispatchGPUComputeAsync(width, height, samples_per_pixel_)) {
+        std::cerr << "Failed to dispatch async GPU compute" << std::endl;
         return false;
     }
-    // GPU dispatch completion logging removed for cleaner output
     
-    // Read back results
-    // GPU readback logging removed for cleaner output
-    if (!readbackGPUResult(width, height)) {
-        std::cerr << "Failed to read back GPU results" << std::endl;
-        return false;
-    }
-    // GPU readback logging removed for cleaner output
-    
-    auto end_time = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    // GPU timing logging removed for cleaner output
+    // Mark as active
+    async_gpu_state_.active = true;
+    async_gpu_state_.width = width;
+    async_gpu_state_.height = height;
+    async_gpu_state_.start_time = std::chrono::steady_clock::now();
     
     return true;
+#else
+    return false;
+#endif
+}
+
+bool PathTracer::is_gpu_complete() {
+#ifdef USE_GPU
+    if (!async_gpu_state_.active) {
+        return true; // No operation in progress
+    }
+    
+    // Check GPU completion without blocking
+    return gpuPipeline_->isComplete();
+#else
+    return false;
+#endif
+}
+
+bool PathTracer::finalize_gpu_result(int width, int height) {
+#ifdef USE_GPU
+    if (!async_gpu_state_.active) {
+        std::cerr << "No async GPU operation to finalize" << std::endl;
+        return false;
+    }
+    
+    // Ensure the operation is complete
+    if (!is_gpu_complete()) {
+        std::cerr << "Attempting to finalize incomplete GPU operation" << std::endl;
+        return false;
+    }
+    
+    // Read back results
+    bool success = readbackGPUResult(width, height);
+    
+    // Mark operation as complete
+    async_gpu_state_.active = false;
+    
+    if (success) {
+        auto end_time = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+            end_time - async_gpu_state_.start_time);
+        // Timing can be logged if needed
+    }
+    
+    return success;
+#else
+    return false;
+#endif
 }
 
 bool PathTracer::trace_hybrid(int width, int height, RenderMode mode) {
@@ -900,6 +957,102 @@ bool PathTracer::dispatchGPUCompute(int width, int height, int samples) {
     
     // GPU dispatch completion logging removed for cleaner output
     return true;
+}
+
+bool PathTracer::dispatchGPUComputeAsync(int width, int height, int samples) {
+#ifdef USE_GPU
+    if (!gpuPipeline_ || !sceneBuffer_ || !gpuRNG_) {
+        return false;
+    }
+    
+    // Texture functions should already be loaded in main thread
+    if (!glGenTextures_ptr || !glBindTexture_ptr || !glGetTexImage_ptr) {
+        std::cerr << "Texture OpenGL functions not loaded" << std::endl;
+        return false;
+    }
+    
+    // Ensure OpenGL context is current before texture operations
+    SDL_GLContext currentContext = SDL_GL_GetCurrentContext();
+    if (!currentContext) {
+        std::cerr << "No OpenGL context for async GPU dispatch" << std::endl;
+        return false;
+    }
+    
+    // Create texture fresh for this render to match sync version exactly
+    // Clean up any existing texture first
+    if (outputTexture_ != 0) {
+        safe_glDeleteTextures(1, &outputTexture_);
+        outputTexture_ = 0;
+    }
+    
+    // Create texture in current context - SAME FORMAT AS SYNC VERSION
+    safe_glGenTextures(1, &outputTexture_);
+    if (outputTexture_ == 0) {
+        std::cerr << "ERROR: Failed to create fresh texture for async!" << std::endl;
+        return false;
+    }
+    
+    // Bind and configure immediately in same context - MATCH SYNC VERSION
+    safe_glBindTexture(GL_TEXTURE_2D, outputTexture_);
+    safe_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    safe_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    safe_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    
+    // CRITICAL: Unbind texture to avoid conflicts with glBindImageTexture
+    safe_glBindTexture(GL_TEXTURE_2D, 0);
+    
+    unsigned int error = glGetError();
+    if (error != GL_NO_ERROR) {
+        std::cerr << "OpenGL error setting up texture: " << error << std::endl;
+        return false;
+    }
+    
+    // Use the compute shader
+    glUseProgram(rayTracingProgram_);
+    
+    // Bind the output texture as an image - MATCH SYNC VERSION FORMAT
+    glBindImageTexture(0, outputTexture_, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);
+    
+    // Bind scene buffer
+    if (sceneBuffer_) {
+        gpuMemory_->bindBuffer(sceneBuffer_, 1);
+    }
+    
+    // Bind RNG buffer - MATCH SYNC VERSION
+    if (gpuRNG_ && gpuRNG_->getRNGBuffer()) {
+        gpuMemory_->bindBuffer(gpuRNG_->getRNGBuffer(), 2);
+    }
+    
+    // Update uniforms
+    updateGPUUniforms(width, height, samples);
+    
+    // Calculate work groups
+    int local_size_x = 16;
+    int local_size_y = 16;
+    int num_groups_x = (width + local_size_x - 1) / local_size_x;
+    int num_groups_y = (height + local_size_y - 1) / local_size_y;
+    
+    // Dispatch asynchronously - this is the key difference!
+    if (!gpuPipeline_->dispatchAsync(num_groups_x, num_groups_y, 1)) {
+        std::cerr << "Failed to dispatch GPU compute async: " << gpuPipeline_->getErrorMessage() << std::endl;
+        return false;
+    }
+    
+    // Check for errors after dispatch
+    error = glGetError();
+    if (error != GL_NO_ERROR) {
+        std::cerr << "OpenGL error after async dispatch: " << error << std::endl;
+        return false;
+    }
+    
+    // NO WAIT - this is async!
+    // No synchronize() call, no glFinish() call
+    // The operation continues in the background
+    
+    return true;
+#else
+    return false;
+#endif
 }
 
 void PathTracer::updateGPUUniforms(int width, int height, int samples) {

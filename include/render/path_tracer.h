@@ -6,6 +6,7 @@
 #include <memory>
 #include <functional>
 #include <atomic>
+#include <chrono>
 
 // Forward declarations
 class SceneManager;
@@ -63,6 +64,11 @@ public:
     bool trace_gpu(int width, int height);
     bool trace_hybrid(int width, int height, RenderMode mode = RenderMode::HYBRID_AUTO);
     bool trace_progressive_gpu(int width, int height, const ProgressiveConfig& config, ProgressiveCallback callback);
+    
+    // Non-blocking GPU operations
+    bool start_gpu_async(int width, int height);  // Start GPU work without waiting
+    bool is_gpu_complete();                       // Check if GPU work is done
+    bool finalize_gpu_result(int width, int height); // Get result when ready
 #endif
     
     void request_stop() { stop_requested_ = true; }
@@ -111,6 +117,7 @@ private:
     bool compileRayTracingShader();
     bool prepareGPUScene();
     bool dispatchGPUCompute(int width, int height, int samples);
+    bool dispatchGPUComputeAsync(int width, int height, int samples);  // Non-blocking version
     bool readbackGPUResult(int width, int height);
     void updateGPUUniforms(int width, int height, int samples);
     
@@ -141,5 +148,13 @@ private:
     SDL_Window* gl_window_;
     SDL_GLContext gl_context_;
     std::shared_ptr<GPUBuffer> rngBuffer_;
+    
+    // Asynchronous GPU state
+    struct AsyncGPUState {
+        bool active = false;
+        int width = 0;
+        int height = 0;
+        std::chrono::steady_clock::time_point start_time;
+    } async_gpu_state_;
 #endif
 };

@@ -51,6 +51,11 @@ public:
     void memoryBarrier();
     void synchronize();
     
+    // Asynchronous operations
+    bool dispatchAsync(const WorkGroupSize& work_groups);
+    bool dispatchAsync(unsigned int work_groups_x, unsigned int work_groups_y = 1, unsigned int work_groups_z = 1);
+    bool isComplete() const;  // Check if async operation is done (non-blocking)
+    
     void setWorkGroupSize(const WorkGroupSize& size);
     WorkGroupSize getMaxWorkGroupSize() const;
     WorkGroupSize getWorkGroupSize() const;
@@ -82,4 +87,10 @@ private:
     
     std::string last_error_;
     std::string driver_info_;
+    
+    // Async operation state
+#ifdef USE_GPU
+    unsigned int sync_object_;  // OpenGL sync object for async operations
+    bool async_operation_active_;
+#endif
 };

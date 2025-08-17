@@ -77,11 +77,16 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
         std::cout << "SDL window opened! Use WASD+RF keys to move camera." << std::endl;
         std::cout << "Press H for help, Q or ESC to quit." << std::endl;
         
-        // Real-time SDL event loop
+        // Real-time SDL event loop with non-blocking progressive rendering support
         while (!ui_manager->should_quit()) {
             ui_manager->process_input();
             ui_manager->update();
             ui_manager->render(); // Show progress feedback
+            
+            // Process non-blocking progressive GPU rendering steps
+            if (render_engine->is_progressive_gpu_active()) {
+                render_engine->step_progressive_gpu();
+            }
             
             // Small delay to prevent 100% CPU usage
             std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60 FPS
