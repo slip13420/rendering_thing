@@ -225,7 +225,7 @@ void RenderEngine::update_camera_preview(const Vector3& camera_pos, const Vector
 void RenderEngine::start_camera_movement() {
     // Stop any existing progressive rendering
     if (is_progressive_rendering() && !manual_progressive_mode_) {
-        std::cout << "Stopping progressive rendering due to camera movement" << std::endl;
+        // Stopping progressive rendering due to camera movement
         stop_progressive_render();
     }
     
@@ -248,7 +248,7 @@ void RenderEngine::stop_camera_movement() {
             
             // Only restart if it's been at least 1 second since last movement
             if (elapsed.count() >= 1000) {
-                std::cout << "Camera stopped moving - restarting progressive rendering" << std::endl;
+                // Camera stopped moving - restarting progressive rendering
                 
                 // Start high-quality progressive render
                 ProgressiveConfig config;
@@ -865,13 +865,11 @@ bool RenderEngine::start_progressive_gpu_main_thread(const ProgressiveConfig& co
     int sampleIncrement = (config.targetSamples - config.initialSamples) / config.progressiveSteps;
     if (sampleIncrement < 1) sampleIncrement = 1;
     
-    std::cout << "Starting GPU progressive rendering: " << config.initialSamples 
-              << " -> " << config.targetSamples << " samples in " << config.progressiveSteps << " steps" << std::endl;
+    // Starting GPU progressive rendering
     
     // Progressive rendering loop
     while (currentSamples <= config.targetSamples && step < config.progressiveSteps) {
-        std::cout << "\nGPU Progressive Step " << (step + 1) << "/" << config.progressiveSteps 
-                  << " - Rendering with " << currentSamples << " samples..." << std::endl;
+        // GPU Progressive Step rendering
         
         // Set the sample count for this step
         path_tracer_->set_samples_per_pixel(currentSamples);
@@ -896,7 +894,7 @@ bool RenderEngine::start_progressive_gpu_main_thread(const ProgressiveConfig& co
             image_output_->display_to_screen();
         }
         
-        std::cout << "GPU Progressive Step " << (step + 1) << " completed successfully" << std::endl;
+        // GPU Progressive Step completed
         
         // Brief pause to show progressive updates
         if (step < config.progressiveSteps - 1) {
@@ -912,7 +910,7 @@ bool RenderEngine::start_progressive_gpu_main_thread(const ProgressiveConfig& co
         step++;
     }
     
-    std::cout << "\nGPU progressive rendering completed successfully!" << std::endl;
+    // GPU progressive rendering completed
     return true;
     
 #else
