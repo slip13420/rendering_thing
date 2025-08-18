@@ -80,6 +80,9 @@ public:
     void set_camera(const Camera& camera);
     void set_max_depth(int depth) { max_depth_ = depth; }
     void set_samples_per_pixel(int samples) { samples_per_pixel_ = samples; }
+    void forceGPUShaderRecompilation();  // Force recompile GPU shaders
+    void forceGPUBufferRebind();  // Force rebind GPU buffers
+    bool trace_gpu_sync(int width, int height);  // Synchronous GPU rendering for testing
     
 #ifdef USE_GPU
     // GPU configuration
@@ -118,8 +121,10 @@ private:
     bool prepareGPUScene();
     bool dispatchGPUCompute(int width, int height, int samples);
     bool dispatchGPUComputeAsync(int width, int height, int samples);  // Non-blocking version
+    bool dispatchGPUComputeProgressive(int width, int height, int samples);  // Linear output for progressive
+    bool trace_gpu_progressive(int width, int height);  // GPU progressive rendering
     bool readbackGPUResult(int width, int height);
-    void updateGPUUniforms(int width, int height, int samples);
+    void updateGPUUniforms(int width, int height, int samples, bool outputLinear = false);
     
     // Scene data
     std::shared_ptr<SceneManager> scene_manager_;

@@ -290,21 +290,24 @@ bool PathTracer::trace_progressive_gpu(int width, int height, const ProgressiveC
     auto last_update = std::chrono::steady_clock::now();
     
     for (int step = 0; step < config.progressiveSteps && !stop_requested_; ++step) {
-        // Use GPU for this progressive step
+        // Use GPU for this progressive step with linear output
         set_samples_per_pixel(current_samples);
         
         std::cout << "Attempting GPU rendering for progressive step " << step << " with " << current_samples << " samples" << std::endl;
-        if (!trace_gpu(width, height)) {
+        if (!trace_gpu_progressive(width, height)) {
             std::cerr << "GPU progressive rendering failed at step " << step << ", falling back to CPU" << std::endl;
             // Fallback to CPU for remaining steps
             return trace_progressive(width, height, config, callback);
         }
         std::cout << "GPU progressive step " << step << " completed successfully" << std::endl;
         
-        // Accumulate the GPU result
+        // Accumulate the GPU result (which is now linear color)
         const auto& gpu_result = get_image_data();
         for (int i = 0; i < width * height; ++i) {
-            image_data_[i] = image_data_[i] + gpu_result[i] * float(current_samples);
+            // Each GPU step renders current_samples samples and averages them
+            // So we need to multiply by current_samples to get the total contribution
+            Color step_contribution = gpu_result[i] * float(current_samples);
+            image_data_[i] = image_data_[i] + step_contribution;
         }
         
         if (stop_requested_) break;
@@ -600,6 +603,45 @@ bool PathTracer::trace_gpu(int width, int height) {
     return finalize_gpu_result(width, height);
 }
 
+bool PathTracer::trace_gpu_progressive(int width, int height) {
+    // Similar to trace_gpu but with linear output for progressive accumulation
+    if (!isGPUAvailable()) {
+        std::cerr << "GPU not available for progressive ray tracing" << std::endl;
+        return false;
+    }
+    
+    SDL_GLContext currentContext = SDL_GL_GetCurrentContext();
+    if (!currentContext) {
+        std::cerr << "ERROR: GPU progressive operations require OpenGL context" << std::endl;
+        return false;
+    }
+    
+    // Prepare for rendering with linear output
+    if (!compileRayTracingShader()) {
+        std::cerr << "Failed to compile shader for progressive rendering" << std::endl;
+        return false;
+    }
+    
+    if (!gpuRNG_->isInitialized()) {
+        std::cerr << "GPU RNG not initialized for progressive rendering" << std::endl;
+        return false;
+    }
+    
+    if (!prepareGPUScene()) {
+        std::cerr << "Failed to prepare scene for progressive rendering" << std::endl;
+        return false;
+    }
+    
+    // Dispatch with linear output enabled
+    if (!dispatchGPUComputeProgressive(width, height, samples_per_pixel_)) {
+        std::cerr << "Failed to dispatch progressive GPU compute" << std::endl;
+        return false;
+    }
+    
+    // Read back results
+    return readbackGPUResult(width, height);
+}
+
 bool PathTracer::start_gpu_async(int width, int height) {
 #ifdef USE_GPU
     if (!isGPUAvailable()) {
@@ -756,44 +798,55 @@ bool PathTracer::prepareGPUScene() {
         return false;
     }
     
-    // Get scene primitives - extract actual data from SceneManager to match CPU rendering
+    // Get scene primitives from the actual SceneManager instead of hardcoded data
+    const auto& objects = scene_manager_->get_objects();
     std::vector<float> sceneData;
     
     // Format: [center.x, center.y, center.z, size_or_radius, albedo.r, albedo.g, albedo.b, material_flags, primitive_type, padding, padding, padding]
     // material_flags: 0.0=diffuse, 1.0=metallic, emission_value=emissive
     // primitive_type: 0.0=sphere, 1.0=cube
     // Each primitive now uses 3 vec4s (12 floats) for alignment
-    sceneData = {
-        // Ground sphere: center=(0,-100.5,-1), radius=100, gray diffuse
-        0.0f, -100.5f, -1.0f, 100.0f,
-        0.5f, 0.5f, 0.5f, 0.0f,
-        0.0f, 0.0f, 0.0f, 0.0f, // type=sphere, padding
+    
+    for (const auto& object : objects) {
+        if (!object) continue;
         
-        // Center sphere: center=(0,0,-1), radius=0.5, red diffuse
-        0.0f, 0.0f, -1.0f, 0.5f,
-        0.7f, 0.3f, 0.3f, 0.0f,
-        0.0f, 0.0f, 0.0f, 0.0f, // type=sphere, padding
+        Vector3 pos = object->position();
+        Material mat = object->material();
         
-        // Left sphere: center=(-1,0,-1), radius=0.5, white metallic (REFLECTIVE)
-        -1.0f, 0.0f, -1.0f, 0.5f,
-        0.8f, 0.8f, 0.9f, 1.0f,
-        0.0f, 0.0f, 0.0f, 0.0f, // type=sphere, padding
+        // Determine primitive type and size
+        float size = 0.5f;  // default
+        float primitiveType = 0.0f;  // sphere by default
         
-        // Right sphere: center=(1,0,-1), radius=0.5, gold diffuse
-        1.0f, 0.0f, -1.0f, 0.5f,
-        0.8f, 0.6f, 0.2f, 0.0f,
-        0.0f, 0.0f, 0.0f, 0.0f, // type=sphere, padding
+        // Try to cast to specific primitive types to get size and type
+        if (auto sphere = std::dynamic_pointer_cast<Sphere>(object)) {
+            size = sphere->radius();
+            primitiveType = 0.0f; // sphere
+        } else if (auto cube = std::dynamic_pointer_cast<Cube>(object)) {
+            size = cube->size();
+            primitiveType = 1.0f; // cube
+        }
         
-        // Top cube: center=(0,1,-2), size=0.8, green diffuse (ACTUAL CUBE!)
-        0.0f, 1.0f, -2.0f, 0.8f,
-        0.2f, 0.8f, 0.2f, 0.0f,
-        1.0f, 0.0f, 0.0f, 0.0f, // type=cube, padding
+        // Convert material properties to GPU format
+        float materialFlags = 0.0f;
+        if (mat.is_emissive()) {
+            materialFlags = mat.emission;  // >1.0 for emissive
+        } else if (mat.metallic > 0.5f) {
+            materialFlags = 1.0f;  // metallic
+        } else {
+            materialFlags = 0.0f;  // diffuse
+        }
         
-        // Light sphere: center=(2,4,-1), radius=0.1, bright yellow, emissive
-        2.0f, 4.0f, -1.0f, 0.1f,
-        1.0f, 1.0f, 0.8f, 5.0f,
-        0.0f, 0.0f, 0.0f, 0.0f  // type=sphere, padding
-    };
+        
+        // Add primitive data (3 vec4s = 12 floats)
+        sceneData.insert(sceneData.end(), {
+            // First vec4: position + size
+            pos.x, pos.y, pos.z, size,
+            // Second vec4: albedo + material flags
+            mat.albedo.r, mat.albedo.g, mat.albedo.b, materialFlags,
+            // Third vec4: primitive type + padding
+            primitiveType, 0.0f, 0.0f, 0.0f
+        });
+    }
     
     // Allocate scene buffer
     size_t sceneBufferSize = sceneData.size() * sizeof(float);
@@ -1073,13 +1126,102 @@ bool PathTracer::dispatchGPUComputeAsync(int width, int height, int samples) {
 #endif
 }
 
-void PathTracer::updateGPUUniforms(int width, int height, int samples) {
+bool PathTracer::dispatchGPUComputeProgressive(int width, int height, int samples) {
+    // Same as dispatchGPUCompute but with linear output for progressive accumulation
+    if (!gpuPipeline_ || !sceneBuffer_ || !gpuRNG_) {
+        return false;
+    }
+    
+    // Ensure OpenGL context is current
+    SDL_GLContext currentContext = SDL_GL_GetCurrentContext();
+    if (!currentContext) {
+        std::cerr << "No OpenGL context for progressive GPU dispatch" << std::endl;
+        return false;
+    }
+    
+    // Clean up any existing texture first
+    if (outputTexture_ != 0) {
+        safe_glDeleteTextures(1, &outputTexture_);
+        outputTexture_ = 0;
+    }
+    
+    // Create texture in current context
+    safe_glGenTextures(1, &outputTexture_);
+    if (outputTexture_ == 0) {
+        std::cerr << "ERROR: Failed to create texture for progressive rendering!" << std::endl;
+        return false;
+    }
+    
+    // Bind and configure texture
+    safe_glBindTexture(GL_TEXTURE_2D, outputTexture_);
+    safe_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    safe_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    safe_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    safe_glBindTexture(GL_TEXTURE_2D, 0);
+    
+    // Use the compute shader
+    glUseProgram(rayTracingProgram_);
+    
+    // Check for errors after shader activation
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR) {
+        std::cerr << "OpenGL error after glUseProgram in progressive: " << error << std::endl;
+        return false;
+    }
+    
+    // Bind output texture as an image
+    glBindImageTexture(0, outputTexture_, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);
+    
+    // Bind scene data buffer
+    gpuMemory_->bindBuffer(sceneBuffer_, 1);
+    
+    // Bind RNG buffer
+    gpuMemory_->bindBuffer(gpuRNG_->getRNGBuffer(), 2);
+    
+    // Set uniforms with linear output enabled for progressive accumulation
+    updateGPUUniforms(width, height, samples, true); // true = linear output
+    
+    // Calculate work group sizes
+    const int LOCAL_SIZE = 16;
+    int workGroupsX = (width + LOCAL_SIZE - 1) / LOCAL_SIZE;
+    int workGroupsY = (height + LOCAL_SIZE - 1) / LOCAL_SIZE;
+    
+    // Dispatch compute shader
+    if (!gpuPipeline_->dispatch(workGroupsX, workGroupsY, 1)) {
+        std::cerr << "Failed to dispatch progressive GPU compute: " << gpuPipeline_->getErrorMessage() << std::endl;
+        return false;
+    }
+    
+    // Check for errors after dispatch
+    error = glGetError();
+    if (error != GL_NO_ERROR) {
+        std::cerr << "OpenGL error after progressive dispatch: " << error << std::endl;
+        return false;
+    }
+    
+    // Wait for completion
+    gpuPipeline_->synchronize();
+    
+    // Add memory barrier to ensure texture writes are completed
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+    
+    // Additional sync
+    glFinish();
+    
+    return true;
+}
+
+void PathTracer::updateGPUUniforms(int width, int height, int samples, bool outputLinear) {
     // Set uniform values
     glUniform1i(glGetUniformLocation(rayTracingProgram_, "imageWidth"), width);
     glUniform1i(glGetUniformLocation(rayTracingProgram_, "imageHeight"), height);
     glUniform1i(glGetUniformLocation(rayTracingProgram_, "samplesPerPixel"), samples);
     glUniform1i(glGetUniformLocation(rayTracingProgram_, "maxDepth"), max_depth_);
-    glUniform1i(glGetUniformLocation(rayTracingProgram_, "sphereCount"), 6); // Ground, center, left metallic, right, top cube, light
+    // Get actual primitive count from scene manager
+    int primitiveCount = scene_manager_ ? static_cast<int>(scene_manager_->get_objects().size()) : 0;
+    glUniform1i(glGetUniformLocation(rayTracingProgram_, "sphereCount"), primitiveCount);
+    // Set output mode for progressive rendering
+    glUniform1i(glGetUniformLocation(rayTracingProgram_, "outputLinear"), outputLinear ? 1 : 0);
     
     // Camera uniforms - use the same camera model as CPU path tracer
     Vector3 pos = camera_.get_position();
@@ -1090,16 +1232,70 @@ void PathTracer::updateGPUUniforms(int width, int height, int samples) {
     Vector3 horizontal = camera_.get_horizontal();
     Vector3 vertical = camera_.get_vertical();
     
-    // Debug camera uniforms
-    // GPU camera uniform logging removed for cleaner output
-    // Camera position logging removed for cleaner output
-    // Camera lower left logging removed for cleaner output
-    // Camera horizontal logging removed for cleaner output
-    // Camera vertical logging removed for cleaner output
+    
     
     glUniform3f(glGetUniformLocation(rayTracingProgram_, "cameraLowerLeft"), lower_left.x, lower_left.y, lower_left.z);
     glUniform3f(glGetUniformLocation(rayTracingProgram_, "cameraHorizontal"), horizontal.x, horizontal.y, horizontal.z);
     glUniform3f(glGetUniformLocation(rayTracingProgram_, "cameraVertical"), vertical.x, vertical.y, vertical.z);
+}
+
+void PathTracer::forceGPUShaderRecompilation() {
+#ifdef USE_GPU
+    if (isGPUAvailable()) {
+        // Force shader recompilation to reset GPU state
+        compileRayTracingShader();
+    }
+#endif
+}
+
+void PathTracer::forceGPUBufferRebind() {
+#ifdef USE_GPU
+    if (isGPUAvailable() && sceneBuffer_ && gpuRNG_) {
+        // Force buffer rebinding to reset GPU buffer state
+        if (gpuMemory_) {
+            gpuMemory_->bindBuffer(sceneBuffer_, 1);
+            gpuMemory_->bindBuffer(gpuRNG_->getRNGBuffer(), 2);
+        }
+    }
+#endif
+}
+
+bool PathTracer::trace_gpu_sync(int width, int height) {
+#ifdef USE_GPU
+    // Completely synchronous GPU rendering bypassing async system
+    if (!isGPUAvailable()) {
+        return false;
+    }
+    
+    SDL_GLContext currentContext = SDL_GL_GetCurrentContext();
+    if (!currentContext) {
+        std::cerr << "No OpenGL context for sync GPU rendering" << std::endl;
+        return false;
+    }
+    
+    // Prepare GPU state
+    if (!compileRayTracingShader()) {
+        return false;
+    }
+    
+    if (!gpuRNG_->isInitialized()) {
+        return false;
+    }
+    
+    if (!prepareGPUScene()) {
+        return false;
+    }
+    
+    // Direct synchronous dispatch
+    if (!dispatchGPUCompute(width, height, samples_per_pixel_)) {
+        return false;
+    }
+    
+    // Read back results
+    return readbackGPUResult(width, height);
+#else
+    return false;
+#endif
 }
 
 bool PathTracer::readbackGPUResult(int width, int height) {
