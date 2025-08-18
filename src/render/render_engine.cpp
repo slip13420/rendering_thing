@@ -208,19 +208,26 @@ void RenderEngine::update_camera_preview(const Vector3& camera_pos, const Vector
     // Update camera position in the scene
     set_camera_position(camera_pos, camera_target);
     
+    // Synchronize camera with PathTracer for GPU rendering
+    // TEMPORARILY DISABLED: This might be causing reflection issues
+    // if (scene_manager_ && scene_manager_->get_camera() && path_tracer_) {
+    //     path_tracer_->set_camera(*scene_manager_->get_camera());
+    // }
+    
     // Use GPU for fast camera preview when available (main thread context)
     if (path_tracer_) {
         // Use reasonable settings for good camera preview quality
         path_tracer_->set_samples_per_pixel(2); // 2 samples for better quality
-        path_tracer_->set_max_depth(2);         // Some bounces for proper scene rendering
+        path_tracer_->set_max_depth(10);        // Sufficient bounces for reflections to work
         
         bool success = false;
         
         // Try GPU first since camera movement is in main thread with OpenGL context
         if (gpu_initialized_ && path_tracer_->isGPUAvailable()) {
-            success = path_tracer_->trace_gpu(render_width_, render_height_);
+            // Use synchronous GPU rendering for camera preview to avoid async corruption
+            success = path_tracer_->trace_gpu_sync(render_width_, render_height_);
             if (success) {
-                std::cout << "Camera preview: GPU render completed" << std::endl;
+                std::cout << "Camera preview: GPU render completed (SYNC)" << std::endl;
             }
         }
         
