@@ -218,11 +218,20 @@ bool PathTracer::trace_progressive(int width, int height, const ProgressiveConfi
     int total_samples = 0;
     
     auto last_update = std::chrono::steady_clock::now();
+    auto last_yield = std::chrono::steady_clock::now();
+    const auto yield_interval = std::chrono::milliseconds(16); // Yield every 16ms (~60 FPS)
     
     for (int step = 0; step < config.progressiveSteps && !stop_requested_; ++step) {
-        // Render additional samples
+        // Render additional samples with periodic yielding
         for (int sample = 0; sample < current_samples && !stop_requested_; ++sample) {
             for (int y = 0; y < height && !stop_requested_; ++y) {
+                // Check if we should yield control to prevent UI hanging
+                auto now = std::chrono::steady_clock::now();
+                if (now - last_yield >= yield_interval) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Brief yield
+                    last_yield = now;
+                }
+                
                 for (int x = 0; x < width && !stop_requested_; ++x) {
                     float u = (x + uniform_dist_(rng_)) / float(width);
                     float v = (y + uniform_dist_(rng_)) / float(height);
@@ -257,8 +266,15 @@ bool PathTracer::trace_progressive(int width, int height, const ProgressiveConfi
             last_update = now;
         }
         
-        // Increase sample count for next iteration
-        current_samples = std::min(current_samples * 2, config.targetSamples - total_samples);
+        // Increase sample count for next iteration - use linear progression instead of exponential
+        // to maintain more responsive rendering with frequent smaller updates
+        int remaining_samples = config.targetSamples - total_samples;
+        int steps_remaining = config.progressiveSteps - step - 1;
+        if (steps_remaining <= 0) break;
+        
+        // Distribute remaining samples across remaining steps
+        current_samples = std::max(1, remaining_samples / steps_remaining);
+        current_samples = std::min(current_samples, remaining_samples);
         if (current_samples <= 0) break;
     }
     
@@ -294,20 +310,65 @@ bool PathTracer::trace_progressive_gpu(int width, int height, const ProgressiveC
         set_samples_per_pixel(current_samples);
         
         std::cout << "Attempting GPU rendering for progressive step " << step << " with " << current_samples << " samples" << std::endl;
-        if (!trace_gpu_progressive(width, height)) {
-            std::cerr << "GPU progressive rendering failed at step " << step << ", falling back to CPU" << std::endl;
-            // Fallback to CPU for remaining steps
-            return trace_progressive(width, height, config, callback);
+        
+        // Use chunked GPU rendering to prevent UI hanging with large sample counts
+        const int max_samples_per_chunk = 50; // Limit GPU chunks to prevent hanging
+        int samples_remaining = current_samples;
+        std::vector<Color> step_accumulation(width * height, Color(0, 0, 0));
+        
+        while (samples_remaining > 0 && !stop_requested_) {
+            int chunk_samples = std::min(samples_remaining, max_samples_per_chunk);
+            set_samples_per_pixel(chunk_samples);
+            
+            std::cout << "GPU chunk: " << chunk_samples << " samples (" << samples_remaining << " remaining)" << std::endl;
+            
+            // Use async GPU rendering for this chunk
+            if (!start_gpu_async(width, height)) {
+                std::cerr << "GPU chunk failed to start, falling back to CPU" << std::endl;
+                return trace_progressive(width, height, config, callback);
+            }
+            
+            // Wait for chunk completion with periodic yielding
+            auto chunk_start_time = std::chrono::steady_clock::now();
+            const auto max_wait_time = std::chrono::milliseconds(3000); // 3 second timeout per chunk
+            const auto yield_interval = std::chrono::milliseconds(16);  // Yield every 16ms for UI
+            
+            while (!is_gpu_complete()) {
+                auto now = std::chrono::steady_clock::now();
+                
+                // Timeout check
+                if (now - chunk_start_time > max_wait_time) {
+                    std::cerr << "GPU chunk timed out, falling back to CPU" << std::endl;
+                    return trace_progressive(width, height, config, callback);
+                }
+                
+                // Yield briefly to keep UI responsive
+                std::this_thread::sleep_for(yield_interval);
+            }
+            
+            // Finalize the chunk result
+            if (!finalize_gpu_result(width, height)) {
+                std::cerr << "GPU chunk failed to finalize, falling back to CPU" << std::endl;
+                return trace_progressive(width, height, config, callback);
+            }
+            
+            // Accumulate chunk result
+            const auto& chunk_result = get_image_data();
+            for (int i = 0; i < width * height; ++i) {
+                // Each chunk renders chunk_samples and averages them, so multiply to get contribution
+                step_accumulation[i] = step_accumulation[i] + (chunk_result[i] * float(chunk_samples));
+            }
+            
+            samples_remaining -= chunk_samples;
         }
+        
+        if (stop_requested_) break;
+        
         std::cout << "GPU progressive step " << step << " completed successfully" << std::endl;
         
-        // Accumulate the GPU result (which is now linear color)
-        const auto& gpu_result = get_image_data();
+        // Accumulate the step result directly (step_accumulation already contains total contribution)
         for (int i = 0; i < width * height; ++i) {
-            // Each GPU step renders current_samples samples and averages them
-            // So we need to multiply by current_samples to get the total contribution
-            Color step_contribution = gpu_result[i] * float(current_samples);
-            image_data_[i] = image_data_[i] + step_contribution;
+            image_data_[i] = image_data_[i] + step_accumulation[i];
         }
         
         if (stop_requested_) break;
@@ -330,8 +391,15 @@ bool PathTracer::trace_progressive_gpu(int width, int height, const ProgressiveC
             last_update = now;
         }
         
-        // Increase sample count for next iteration
-        current_samples = std::min(current_samples * 2, config.targetSamples - total_samples);
+        // Increase sample count for next iteration - use linear progression instead of exponential
+        // to maintain more responsive rendering with frequent smaller updates
+        int remaining_samples = config.targetSamples - total_samples;
+        int steps_remaining = config.progressiveSteps - step - 1;
+        if (steps_remaining <= 0) break;
+        
+        // Distribute remaining samples across remaining steps
+        current_samples = std::max(1, remaining_samples / steps_remaining);
+        current_samples = std::min(current_samples, remaining_samples);
         if (current_samples <= 0) break;
     }
     

@@ -332,31 +332,31 @@ void UIInput::handle_realtime_camera_input(int keycode) {
             if (render_engine_) {
                 ProgressiveConfig config;
                 config.initialSamples = 1;
-                config.targetSamples = 2000;  // High quality GPU progressive rendering
-                config.progressiveSteps = 12;  // More steps for gradual quality improvement
-                config.updateInterval = 0.3f;
+                config.targetSamples = 500;   // Balanced quality/performance for responsive rendering
+                config.progressiveSteps = 10;  // Optimal steps for gradual quality improvement
+                config.updateInterval = 0.2f;
                 
                 // Try GPU progressive rendering first (non-blocking)
                 if (render_engine_->is_gpu_available()) {
-                    std::cout << "Starting non-blocking GPU progressive rendering (1->2000 samples, 12 steps)..." << std::endl;
+                    std::cout << "Starting non-blocking GPU progressive rendering (1->500 samples, 10 steps)..." << std::endl;
                     bool success = render_engine_->start_progressive_gpu_non_blocking(config);
                     if (success) {
                         std::cout << "GPU progressive rendering started (non-blocking mode)" << std::endl;
                     } else {
                         std::cout << "GPU progressive rendering failed, falling back to CPU..." << std::endl;
                         // Fallback to CPU progressive
-                        config.targetSamples = 1000;  // CPU can handle more samples
-                        config.progressiveSteps = 12;
-                        config.updateInterval = 0.4f;
-                        std::cout << "Starting CPU progressive render (1->1000 samples, 12 steps)..." << std::endl;
+                        config.targetSamples = 300;   // CPU gets lower target for performance
+                        config.progressiveSteps = 10;
+                        config.updateInterval = 0.3f;
+                        std::cout << "Starting CPU progressive render (1->300 samples, 10 steps)..." << std::endl;
                         render_engine_->start_progressive_render(config);
                     }
                 } else {
                     // No GPU available, use CPU progressive
-                    config.targetSamples = 1000;
-                    config.progressiveSteps = 12;
-                    config.updateInterval = 0.4f;
-                    std::cout << "Starting CPU progressive render (1->1000 samples, 12 steps)..." << std::endl;
+                    config.targetSamples = 300;
+                    config.progressiveSteps = 10;
+                    config.updateInterval = 0.3f;
+                    std::cout << "Starting CPU progressive render (1->300 samples, 10 steps)..." << std::endl;
                     render_engine_->start_progressive_render(config);
                 }
             } else {
