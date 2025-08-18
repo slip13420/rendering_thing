@@ -62,8 +62,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
         
         // Configure rendering settings based on GPU availability
         if (render_engine->is_gpu_available()) {
-            std::cout << "GPU detected - using Full HD resolution (1920x1080)" << std::endl;
-            render_engine->set_render_size(1920, 1080);
+            std::cout << "GPU detected - using HD resolution (1280x720)" << std::endl;
+            render_engine->set_render_size(1280, 720);
             render_engine->set_samples_per_pixel(4); // Reduced from 10 for faster live operations
         } else {
             std::cout << "No GPU - using low resolution for CPU rendering (320x240)" << std::endl;
@@ -79,8 +79,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
         // Create a quick preview render at moderate resolution that scales to fill window
         std::cout << "Creating quick preview render..." << std::endl;
         int original_samples = (render_engine->is_gpu_available()) ? 4 : 1;
-        int target_width = render_engine->is_gpu_available() ? 1920 : 320;
-        int target_height = render_engine->is_gpu_available() ? 1080 : 240;
+        int target_width = render_engine->is_gpu_available() ? 1280 : 320;
+        int target_height = render_engine->is_gpu_available() ? 720 : 240;
         
         // Use target resolution for preview to avoid window size conflicts
         render_engine->set_render_size(target_width, target_height);

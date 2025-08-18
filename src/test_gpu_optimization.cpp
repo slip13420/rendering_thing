@@ -55,7 +55,7 @@ int main() {
         {256, 256, 10, "Small Scene"},
         {512, 512, 25, "Medium Scene"}, 
         {1024, 1024, 50, "Large Scene"},
-        {1920, 1080, 50, "Full HD (GPU Target)"}
+        {1280, 720, 50, "HD (GPU Target)"}
     };
     
     for (const auto& [width, height, samples, name] : testScenarios) {
@@ -85,8 +85,8 @@ int main() {
         pathTracer->set_samples_per_pixel(10); // Lower samples for faster testing
         
         // Run a high-res benchmark to trigger GPU
-        std::cout << "Running Full HD GPU benchmark (1920x1080)..." << std::endl;
-        auto result = benchmarkSuite->runBenchmarkScenario("FullHD_GPU_Test", 1920, 1080, 10, 100);
+        std::cout << "Running HD GPU benchmark (1280x720)..." << std::endl;
+        auto result = benchmarkSuite->runBenchmarkScenario("HD_GPU_Test", 1280, 720, 10, 100);
         
         if (result.errorMessage.empty()) {
             std::cout << "✓ Benchmark completed successfully!" << std::endl;

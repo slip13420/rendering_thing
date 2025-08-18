@@ -7,4 +7,3 @@
 * Does it support resize live?
 * getting a wait or terminate again
 * realtime preview? (I think we should do a course correct here)
-* set it to 1280x720 for performance

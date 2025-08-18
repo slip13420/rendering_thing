@@ -14,7 +14,7 @@
 #endif
 
 RenderEngine::RenderEngine() 
-    : initialized_(false), render_width_(1920), render_height_(1080),
+    : initialized_(false), render_width_(1280), render_height_(720),
       render_state_(RenderState::IDLE), stop_requested_(false), progressive_mode_(false), manual_progressive_mode_(false),
       render_mode_(RenderMode::AUTO), gpu_initialized_(false), camera_moving_(false) {
     initialize();
