@@ -5,7 +5,7 @@ layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba8, binding = 0) uniform image2D outputImage;
 
 layout(std430, binding = 1) readonly buffer SceneData {
-    vec4 spheres[]; // Now contains both spheres and cubes - 3 vec4s per primitive
+    vec4 spheres[]; // Contains all primitive types - 3 vec4s per primitive
 };
 
 layout(std430, binding = 2) buffer RNGStates {
@@ -51,223 +51,487 @@ vec3 randomUnitVector() {
     return normalize(randomInUnitSphere());
 }
 
+vec3 randomInHemisphere(vec3 normal) {
+    vec3 in_unit_sphere = randomInUnitSphere();
+    if (dot(in_unit_sphere, normal) > 0.0) {
+        return in_unit_sphere;
+    } else {
+        return -in_unit_sphere;
+    }
+}
+
 vec3 reflect(vec3 v, vec3 n) {
     return v - 2.0 * dot(v, n) * n;
 }
 
-// Ray structure
+bool nearZero(vec3 v) {
+    const float s = 1e-8;
+    return (abs(v.x) < s) && (abs(v.y) < s) && (abs(v.z) < s);
+}
+
 struct Ray {
     vec3 origin;
     vec3 direction;
 };
 
-vec3 rayAt(Ray ray, float t) {
-    return ray.origin + t * ray.direction;
-}
-
-// Material and hit information
 struct HitRecord {
     vec3 point;
     vec3 normal;
     float t;
     bool frontFace;
     vec3 albedo;
-    float materialFlags; // 0.0=diffuse, 1.0=metallic, >1.0=emission intensity
+    float roughness;
+    float metallic;
+    float emission;
 };
 
-bool hitSphere(vec3 center, float radius, Ray ray, float tMin, float tMax, out HitRecord rec) {
-    vec3 oc = ray.origin - center;
-    float a = dot(ray.direction, ray.direction);
-    float halfB = dot(oc, ray.direction);
+void setFaceNormal(inout HitRecord rec, Ray r, vec3 outward_normal) {
+    rec.frontFace = dot(r.direction, outward_normal) < 0;
+    rec.normal = rec.frontFace ? outward_normal : -outward_normal;
+}
+
+// Enhanced sphere intersection
+bool hitSphere(vec3 center, float radius, vec3 albedo, float roughness, float metallic, float emission, Ray r, float t_min, float t_max, inout HitRecord rec) {
+    vec3 oc = r.origin - center;
+    float a = dot(r.direction, r.direction);
+    float half_b = dot(oc, r.direction);
     float c = dot(oc, oc) - radius * radius;
-    float discriminant = halfB * halfB - a * c;
+    float discriminant = half_b * half_b - a * c;
     
-    if (discriminant < 0.0) return false;
+    if (discriminant < 0) return false;
     
     float sqrtd = sqrt(discriminant);
-    float root = (-halfB - sqrtd) / a;
-    
-    if (root < tMin || tMax < root) {
-        root = (-halfB + sqrtd) / a;
-        if (root < tMin || tMax < root) return false;
+    float root = (-half_b - sqrtd) / a;
+    if (root < t_min || t_max < root) {
+        root = (-half_b + sqrtd) / a;
+        if (root < t_min || t_max < root) {
+            return false;
+        }
     }
     
     rec.t = root;
-    rec.point = rayAt(ray, rec.t);
-    vec3 outwardNormal = (rec.point - center) / radius;
-    rec.frontFace = dot(ray.direction, outwardNormal) < 0.0;
-    rec.normal = rec.frontFace ? outwardNormal : -outwardNormal;
+    rec.point = r.origin + rec.t * r.direction;
+    vec3 outward_normal = (rec.point - center) / radius;
+    setFaceNormal(rec, r, outward_normal);
+    rec.albedo = albedo;
+    rec.roughness = roughness;
+    rec.metallic = metallic;
+    rec.emission = emission;
     
     return true;
 }
 
-bool hitCube(vec3 center, float size, Ray ray, float tMin, float tMax, out HitRecord rec) {
-    // Axis-aligned bounding box intersection
-    vec3 rayInv = 1.0 / ray.direction;
-    vec3 minBounds = center - vec3(size * 0.5);
-    vec3 maxBounds = center + vec3(size * 0.5);
+// Enhanced cube intersection
+bool hitCube(vec3 center, float size, vec3 albedo, float roughness, float metallic, float emission, Ray r, float t_min, float t_max, inout HitRecord rec) {
+    vec3 halfSize = vec3(size * 0.5);
+    vec3 minCorner = center - halfSize;
+    vec3 maxCorner = center + halfSize;
     
-    vec3 t1 = (minBounds - ray.origin) * rayInv;
-    vec3 t2 = (maxBounds - ray.origin) * rayInv;
+    vec3 invDir = 1.0 / r.direction;
+    vec3 t1 = (minCorner - r.origin) * invDir;
+    vec3 t2 = (maxCorner - r.origin) * invDir;
     
-    vec3 tNear = min(t1, t2);
-    vec3 tFar = max(t1, t2);
+    vec3 tMin = min(t1, t2);
+    vec3 tMax = max(t1, t2);
     
-    float tNearMax = max(max(tNear.x, tNear.y), tNear.z);
-    float tFarMin = min(min(tFar.x, tFar.y), tFar.z);
+    float tNear = max(max(tMin.x, tMin.y), tMin.z);
+    float tFar = min(min(tMax.x, tMax.y), tMax.z);
     
-    if (tNearMax > tFarMin || tFarMin < tMin || tNearMax > tMax) {
+    if (tNear > tFar || tFar < t_min || tNear > t_max) {
         return false;
     }
     
-    float t = (tNearMax > tMin) ? tNearMax : tFarMin;
-    if (t < tMin || t > tMax) return false;
-    
-    rec.t = t;
-    rec.point = rayAt(ray, t);
-    
-    // Calculate normal based on which face was hit
-    vec3 localPoint = rec.point - center;
-    vec3 absLocal = abs(localPoint);
-    float maxComponent = max(max(absLocal.x, absLocal.y), absLocal.z);
-    
-    if (maxComponent == absLocal.x) {
-        rec.normal = vec3(sign(localPoint.x), 0.0, 0.0);
-    } else if (maxComponent == absLocal.y) {
-        rec.normal = vec3(0.0, sign(localPoint.y), 0.0);
-    } else {
-        rec.normal = vec3(0.0, 0.0, sign(localPoint.z));
+    float t = (tNear > t_min) ? tNear : tFar;
+    if (t < t_min || t > t_max) {
+        return false;
     }
     
-    rec.frontFace = dot(ray.direction, rec.normal) < 0.0;
-    if (!rec.frontFace) rec.normal = -rec.normal;
+    rec.t = t;
+    rec.point = r.origin + t * r.direction;
+    
+    // Calculate normal
+    vec3 localPoint = rec.point - center;
+    vec3 absPoint = abs(localPoint);
+    vec3 normal;
+    
+    if (absPoint.x > absPoint.y && absPoint.x > absPoint.z) {
+        normal = vec3(sign(localPoint.x), 0, 0);
+    } else if (absPoint.y > absPoint.z) {
+        normal = vec3(0, sign(localPoint.y), 0);
+    } else {
+        normal = vec3(0, 0, sign(localPoint.z));
+    }
+    
+    setFaceNormal(rec, r, normal);
+    rec.albedo = albedo;
+    rec.roughness = roughness;
+    rec.metallic = metallic;
+    rec.emission = emission;
     
     return true;
 }
 
-bool hitWorld(Ray ray, float tMin, float tMax, out HitRecord rec) {
-    HitRecord tempRec;
-    bool hitAnything = false;
-    float closestSo = tMax;
+// Simplified torus intersection to prevent artifacts
+bool hitTorus(vec3 center, float majorRadius, float minorRadius, vec3 albedo, float roughness, float metallic, float emission, Ray r, float t_min, float t_max, inout HitRecord rec) {
+    // Transform ray to torus space
+    vec3 rayOrigin = r.origin - center;
+    vec3 rayDir = normalize(r.direction);
     
-    // Iterate through primitives (each primitive is 3 vec4s: center+size, albedo+material, type+padding)
-    int primitiveCount = spheres.length() / 3;
-    for (int i = 0; i < primitiveCount; i++) {
-        vec4 positionData = spheres[i * 3];
-        vec4 materialData = spheres[i * 3 + 1];
-        vec4 typeData = spheres[i * 3 + 2];
+    float R = majorRadius;
+    float r2 = minorRadius * minorRadius;
+    
+    // Use fewer samples with better initial guess to reduce artifacts
+    int maxSamples = 32; // Reduced to prevent over-sampling artifacts
+    float step = (t_max - t_min) / float(maxSamples);
+    float tolerance = 0.1; // Relaxed tolerance to prevent noise
+    
+    // Bias towards center of ray range for better hit detection
+    float bias = (t_max + t_min) * 0.3;
+    
+    for (int i = 0; i < maxSamples; i++) {
+        float t = t_min + float(i) * step + bias;
+        if (t > t_max) break;
         
-        vec3 center = positionData.xyz;
-        float size = positionData.w;
-        float primitiveType = typeData.x;
+        vec3 p = rayOrigin + t * rayDir;
+        
+        // Torus equation: (sqrt(x^2 + y^2) - R)^2 + z^2 = r^2
+        float distFromZAxis = sqrt(p.x * p.x + p.y * p.y + 0.0001); // Avoid zero
+        float f = (distFromZAxis - R) * (distFromZAxis - R) + p.z * p.z - r2;
+        
+        if (abs(f) < tolerance) {
+            rec.t = t;
+            rec.point = r.origin + t * r.direction;
+            
+            // Simplified normal calculation to reduce precision issues
+            vec3 localPoint = rec.point - center;
+            float distXY = sqrt(localPoint.x * localPoint.x + localPoint.y * localPoint.y + 0.0001);
+            
+            vec3 centerOnTorus = vec3(
+                localPoint.x * R / distXY,
+                localPoint.y * R / distXY,
+                0.0
+            );
+            vec3 normal = normalize(localPoint - centerOnTorus + vec3(0.0001)); // Avoid zero normal
+            setFaceNormal(rec, r, normal);
+            
+            rec.albedo = albedo;
+            rec.roughness = roughness;
+            rec.metallic = metallic;
+            rec.emission = emission;
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// Enhanced pyramid intersection using triangle intersection
+bool hitPyramid(vec3 center, float size, vec3 albedo, float roughness, float metallic, float emission, Ray r, float t_min, float t_max, inout HitRecord rec) {
+    float halfSize = size * 0.5;
+    
+    // Pyramid vertices
+    vec3 apex = center + vec3(0, halfSize, 0);
+    vec3 base1 = center + vec3(-halfSize, -halfSize, -halfSize);
+    vec3 base2 = center + vec3(halfSize, -halfSize, -halfSize);
+    vec3 base3 = center + vec3(halfSize, -halfSize, halfSize);
+    vec3 base4 = center + vec3(-halfSize, -halfSize, halfSize);
+    
+    float closest_t = t_max + 1.0;
+    vec3 closest_normal;
+    bool hit = false;
+    
+    // Check base (square)
+    vec3 baseNormal = vec3(0, -1, 0);
+    float t = (-halfSize + center.y - r.origin.y) / r.direction.y;
+    if (t > t_min && t < t_max) {
+        vec3 hitPoint = r.origin + t * r.direction;
+        vec3 localHit = hitPoint - center;
+        if (abs(localHit.x) <= halfSize && abs(localHit.z) <= halfSize) {
+            if (t < closest_t) {
+                closest_t = t;
+                closest_normal = baseNormal;
+                hit = true;
+            }
+        }
+    }
+    
+    // Check triangular faces using Möller-Trumbore algorithm
+    // Face 1: apex, base1, base2
+    vec3 edge1 = base1 - apex;
+    vec3 edge2 = base2 - apex;
+    vec3 h = cross(r.direction, edge2);
+    float a = dot(edge1, h);
+    
+    if (abs(a) > 0.000001) {
+        float f = 1.0 / a;
+        vec3 s = r.origin - apex;
+        float u = f * dot(s, h);
+        
+        if (u >= 0.0 && u <= 1.0) {
+            vec3 q = cross(s, edge1);
+            float v = f * dot(r.direction, q);
+            
+            if (v >= 0.0 && u + v <= 1.0) {
+                float t = f * dot(edge2, q);
+                if (t > t_min && t < t_max && t < closest_t) {
+                    closest_t = t;
+                    closest_normal = normalize(cross(edge1, edge2));
+                    hit = true;
+                }
+            }
+        }
+    }
+    
+    // Face 2: apex, base2, base3
+    edge1 = base2 - apex;
+    edge2 = base3 - apex;
+    h = cross(r.direction, edge2);
+    a = dot(edge1, h);
+    
+    if (abs(a) > 0.000001) {
+        float f = 1.0 / a;
+        vec3 s = r.origin - apex;
+        float u = f * dot(s, h);
+        
+        if (u >= 0.0 && u <= 1.0) {
+            vec3 q = cross(s, edge1);
+            float v = f * dot(r.direction, q);
+            
+            if (v >= 0.0 && u + v <= 1.0) {
+                float t = f * dot(edge2, q);
+                if (t > t_min && t < t_max && t < closest_t) {
+                    closest_t = t;
+                    closest_normal = normalize(cross(edge1, edge2));
+                    hit = true;
+                }
+            }
+        }
+    }
+    
+    // Face 3: apex, base3, base4
+    edge1 = base3 - apex;
+    edge2 = base4 - apex;
+    h = cross(r.direction, edge2);
+    a = dot(edge1, h);
+    
+    if (abs(a) > 0.000001) {
+        float f = 1.0 / a;
+        vec3 s = r.origin - apex;
+        float u = f * dot(s, h);
+        
+        if (u >= 0.0 && u <= 1.0) {
+            vec3 q = cross(s, edge1);
+            float v = f * dot(r.direction, q);
+            
+            if (v >= 0.0 && u + v <= 1.0) {
+                float t = f * dot(edge2, q);
+                if (t > t_min && t < t_max && t < closest_t) {
+                    closest_t = t;
+                    closest_normal = normalize(cross(edge1, edge2));
+                    hit = true;
+                }
+            }
+        }
+    }
+    
+    // Face 4: apex, base4, base1
+    edge1 = base4 - apex;
+    edge2 = base1 - apex;
+    h = cross(r.direction, edge2);
+    a = dot(edge1, h);
+    
+    if (abs(a) > 0.000001) {
+        float f = 1.0 / a;
+        vec3 s = r.origin - apex;
+        float u = f * dot(s, h);
+        
+        if (u >= 0.0 && u <= 1.0) {
+            vec3 q = cross(s, edge1);
+            float v = f * dot(r.direction, q);
+            
+            if (v >= 0.0 && u + v <= 1.0) {
+                float t = f * dot(edge2, q);
+                if (t > t_min && t < t_max && t < closest_t) {
+                    closest_t = t;
+                    closest_normal = normalize(cross(edge1, edge2));
+                    hit = true;
+                }
+            }
+        }
+    }
+    
+    if (hit) {
+        rec.t = closest_t;
+        rec.point = r.origin + closest_t * r.direction;
+        setFaceNormal(rec, r, closest_normal);
+        rec.albedo = albedo;
+        rec.roughness = roughness;
+        rec.metallic = metallic;
+        rec.emission = emission;
+        return true;
+    }
+    
+    return false;
+}
+
+bool hitScene(Ray r, float t_min, float t_max, inout HitRecord rec) {
+    HitRecord temp_rec;
+    bool hit_anything = false;
+    float closest_so_far = t_max;
+    
+    int bufferLength = spheres.length();
+    if (bufferLength < 3) return false; // Safety check for empty/corrupted buffer
+    
+    int numPrimitives = bufferLength / 3;
+    
+    for (int i = 0; i < numPrimitives; i++) {
+        int baseIndex = i * 3;
+        
+        // Bounds check to prevent buffer overrun
+        if (baseIndex + 2 >= bufferLength) break;
+        
+        // First vec4: position + size
+        vec4 posSize = spheres[baseIndex];
+        vec3 position = posSize.xyz;
+        float size = posSize.w;
+        
+        // Validate primitive size to prevent degenerate cases
+        if (size <= 0.0001 || size > 1000.0) continue;
+        
+        // Second vec4: color + roughness
+        vec4 colorRough = spheres[baseIndex + 1];
+        vec3 albedo = colorRough.rgb;
+        float roughness = colorRough.a;
+        
+        // Third vec4: type + material properties
+        vec4 typeMat = spheres[baseIndex + 2];
+        int primitiveType = int(typeMat.x);
+        float metallic = typeMat.y;
+        float emission = typeMat.z;
         
         bool hit = false;
-        if (primitiveType < 0.5) {
-            // Sphere
-            hit = hitSphere(center, size, ray, tMin, closestSo, tempRec);
-        } else {
-            // Cube
-            hit = hitCube(center, size, ray, tMin, closestSo, tempRec);
+        if (primitiveType == 1) { // Sphere
+            hit = hitSphere(position, size, albedo, roughness, metallic, emission, r, t_min, closest_so_far, temp_rec);
+        } else if (primitiveType == 2) { // Cube
+            hit = hitCube(position, size, albedo, roughness, metallic, emission, r, t_min, closest_so_far, temp_rec);
+        } else if (primitiveType == 3) { // Torus
+            float majorRadius = size;
+            float minorRadius = size * 0.3; // Minor radius as fraction of major
+            hit = hitTorus(position, majorRadius, minorRadius, albedo, roughness, metallic, emission, r, t_min, closest_so_far, temp_rec);
+        } else if (primitiveType == 4) { // Pyramid
+            hit = hitPyramid(position, size, albedo, roughness, metallic, emission, r, t_min, closest_so_far, temp_rec);
         }
         
         if (hit) {
-            hitAnything = true;
-            closestSo = tempRec.t;
-            rec = tempRec;
-            rec.albedo = materialData.xyz;
-            rec.materialFlags = materialData.w;
+            hit_anything = true;
+            closest_so_far = temp_rec.t;
+            rec = temp_rec;
         }
     }
     
-    return hitAnything;
+    return hit_anything;
 }
 
-// Non-recursive ray color using iterative approach
-vec3 rayColor(Ray initialRay) {
-    vec3 color = vec3(0.0);
-    vec3 attenuation = vec3(1.0);
-    Ray ray = initialRay;
+vec3 rayColor(Ray r, int depth) {
+    vec3 color = vec3(1.0);
+    vec3 accumulated_emission = vec3(0.0);
     
-    for (int depth = 0; depth < maxDepth; depth++) {
+    for (int i = 0; i < depth; i++) {
         HitRecord rec;
-        if (hitWorld(ray, 0.001, 1000000.0, rec)) {
-            // Handle emissive materials (lights)
-            if (rec.materialFlags > 1.5) {
-                color += attenuation * rec.albedo * rec.materialFlags;
-                break;
+        
+        if (hitScene(r, 0.001, 1000000.0, rec)) {
+            // Add emission from this surface
+            accumulated_emission += color * rec.emission * rec.albedo;
+            
+            // Surface offset to prevent self-intersection
+            r.origin = rec.point + rec.normal * 0.002;
+            
+            // PBR material handling
+            if (rec.metallic > 0.5) {
+                // Metallic reflection
+                vec3 reflected = reflect(normalize(r.direction), rec.normal);
+                vec3 fuzz = rec.roughness * randomInUnitSphere();
+                r.direction = normalize(reflected + fuzz);
+                color *= rec.albedo;
+            } else {
+                // Diffuse scattering
+                vec3 scatter_direction = rec.normal + randomUnitVector();
+                if (nearZero(scatter_direction)) {
+                    scatter_direction = rec.normal;
+                }
+                r.direction = normalize(scatter_direction);
+                color *= rec.albedo * (1.0 - rec.roughness * 0.5);
             }
             
-            if (rec.materialFlags > 0.5) {
-                // Metallic material - reflection
-                vec3 reflected = reflect(normalize(ray.direction), rec.normal);
-                // Add small amount of fuzziness for realistic metal
-                reflected = reflected + randomInUnitSphere() * 0.1;
-                
-                if (dot(reflected, rec.normal) > 0.0) {
-                    attenuation *= rec.albedo;
-                    ray.origin = rec.point;
-                    ray.direction = reflected;
-                } else {
-                    // Absorbed
-                    break;
-                }
-            } else {
-                // Diffuse material - Lambertian scattering
-                attenuation *= rec.albedo;
-                vec3 target = rec.point + rec.normal + randomUnitVector();
-                ray.origin = rec.point;
-                ray.direction = target - rec.point;
-            }
+            // Energy conservation
+            color *= 0.7;
         } else {
-            // Sky gradient
-            vec3 unitDirection = normalize(ray.direction);
-            float t = 0.5 * (unitDirection.y + 1.0);
-            color += attenuation * ((1.0 - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0));
-            break;
+            // Sky color
+            vec3 unit_direction = normalize(r.direction);
+            float t = 0.5 * (unit_direction.y + 1.0);
+            vec3 sky_color = (1.0 - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
+            return accumulated_emission + color * sky_color;
+        }
+        
+        // Russian roulette for path termination
+        if (i > 3) {
+            float p = max(color.r, max(color.g, color.b));
+            if (randomFloat() > p) {
+                break;
+            }
+            color /= p;
         }
     }
     
-    return color;
+    return accumulated_emission;
 }
 
 void main() {
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= imageWidth || pixel.y >= imageHeight) {
+        return;
+    }
     
-    // Check bounds
-    if (pixel.x >= imageWidth || pixel.y >= imageHeight) return;
-    
-    // Initialize RNG state for this pixel
-    int pixelIndex = pixel.y * imageWidth + pixel.x;
-    rngState = rngStates[pixelIndex];
-    if (rngState == 0u) rngState = uint(pixelIndex + 1);
+    // Initialize RNG for this pixel with unique per-pixel seed
+    uint pixelIndex = pixel.y * imageWidth + pixel.x;
+    uint rngBufferSize = rngStates.length();
+    if (rngBufferSize > 0) {
+        rngState = rngStates[pixelIndex % rngBufferSize];
+        // Ensure unique state per pixel to prevent cross-contamination
+        rngState ^= pixelIndex * 0x9e3779b9u; // Golden ratio hash
+        rngState ^= pixelIndex << 16;
+    } else {
+        // Fallback if RNG buffer not available
+        rngState = pixelIndex * 0x9e3779b9u + 0x12345678u;
+    }
     
     vec3 color = vec3(0.0);
     
-    // Multi-sampling
     for (int s = 0; s < samplesPerPixel; s++) {
-        // Anti-aliasing with random sampling
         float u = (float(pixel.x) + randomFloat()) / float(imageWidth);
         float v = (float(pixel.y) + randomFloat()) / float(imageHeight);
         
-        // Generate ray using GPU camera model
         Ray ray;
         ray.origin = cameraPosition;
-        ray.direction = cameraLowerLeft + u * cameraHorizontal + v * cameraVertical - cameraPosition;
+        ray.direction = normalize(cameraLowerLeft + u * cameraHorizontal + v * cameraVertical - cameraPosition);
         
-        color += rayColor(ray);
+        color += rayColor(ray, maxDepth);
+        
+        // Update RNG state
+        rngState = rng();
     }
     
-    // Average the samples
     color /= float(samplesPerPixel);
     
-    // Apply gamma correction only if not outputting linear color for progressive accumulation
+    // Apply gamma correction unless outputting linear color for progressive accumulation
     if (outputLinear == 0) {
-        color = sqrt(color); // Simple gamma correction
+        color = sqrt(color);  // Simple gamma correction
     }
     
-    // Store the updated RNG state
-    rngStates[pixelIndex] = rngState;
-    
-    // Output final color
     imageStore(outputImage, pixel, vec4(color, 1.0));
+    
+    // Store updated RNG state only if buffer exists and we're not causing conflicts
+    if (rngBufferSize > 0 && pixelIndex < rngBufferSize) {
+        rngStates[pixelIndex] = rngState;
+    }
 }
