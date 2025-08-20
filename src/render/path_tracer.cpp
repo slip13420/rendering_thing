@@ -872,7 +872,7 @@ bool PathTracer::prepareGPUScene() {
     
     // Format: [center.x, center.y, center.z, size_or_radius, albedo.r, albedo.g, albedo.b, material_flags, primitive_type, padding, padding, padding]
     // material_flags: 0.0=diffuse, 1.0=metallic, emission_value=emissive
-    // primitive_type: 0.0=sphere, 1.0=cube
+    // primitive_type: 1.0=sphere, 2.0=cube, 3.0=torus, 4.0=pyramid
     // Each primitive now uses 3 vec4s (12 floats) for alignment
     
     for (const auto& object : objects) {
@@ -883,36 +883,31 @@ bool PathTracer::prepareGPUScene() {
         
         // Determine primitive type and size
         float size = 0.5f;  // default
-        float primitiveType = 0.0f;  // sphere by default
+        float primitiveType = 1.0f;  // sphere by default (matching PrimitiveType::SPHERE)
         
         // Try to cast to specific primitive types to get size and type
         if (auto sphere = std::dynamic_pointer_cast<Sphere>(object)) {
             size = sphere->radius();
-            primitiveType = 0.0f; // sphere
+            primitiveType = 1.0f; // PrimitiveType::SPHERE
         } else if (auto cube = std::dynamic_pointer_cast<Cube>(object)) {
             size = cube->size();
-            primitiveType = 1.0f; // cube
+            primitiveType = 2.0f; // PrimitiveType::CUBE
+        } else if (auto torus = std::dynamic_pointer_cast<Torus>(object)) {
+            size = torus->major_radius(); // Use major radius as base size
+            primitiveType = 3.0f; // PrimitiveType::TORUS
+        } else if (auto pyramid = std::dynamic_pointer_cast<Pyramid>(object)) {
+            size = pyramid->base_size();
+            primitiveType = 4.0f; // PrimitiveType::PYRAMID
         }
         
-        // Convert material properties to GPU format
-        float materialFlags = 0.0f;
-        if (mat.is_emissive()) {
-            materialFlags = mat.emission;  // >1.0 for emissive
-        } else if (mat.metallic > 0.5f) {
-            materialFlags = 1.0f;  // metallic
-        } else {
-            materialFlags = 0.0f;  // diffuse
-        }
-        
-        
-        // Add primitive data (3 vec4s = 12 floats)
+        // Add primitive data (3 vec4s = 12 floats) with proper material properties
         sceneData.insert(sceneData.end(), {
             // First vec4: position + size
             pos.x, pos.y, pos.z, size,
-            // Second vec4: albedo + material flags
-            mat.albedo.r, mat.albedo.g, mat.albedo.b, materialFlags,
-            // Third vec4: primitive type + padding
-            primitiveType, 0.0f, 0.0f, 0.0f
+            // Second vec4: color + roughness
+            mat.albedo.r, mat.albedo.g, mat.albedo.b, mat.roughness,
+            // Third vec4: primitive type + metallic + emission + padding
+            primitiveType, mat.metallic, mat.emission, 0.0f
         });
     }
     

@@ -31,7 +31,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
     try {
         auto render_engine = std::make_shared<RenderEngine>();
-        auto ui_manager = std::make_unique<UIManager>();
+        auto ui_manager = std::make_shared<UIManager>();
         auto image_output = std::make_shared<ImageOutput>();
         
         // Get scene manager from render engine to connect components
@@ -45,6 +45,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
         ui_manager->set_render_engine(render_engine);
         ui_manager->set_image_output(image_output);
         ui_manager->initialize();
+        
+        // Setup primitive management after UIManager is created as shared_ptr
+        ui_manager->setup_primitive_management();
         
         // Connect progress callback from render engine to UI manager
         render_engine->set_progress_callback([&ui_manager](int w, int h, int current, int target) {

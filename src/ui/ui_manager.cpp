@@ -1,5 +1,5 @@
-#include "ui_manager.h"
-#include "ui_input.h"
+#include "ui/ui_manager.h"
+#include "ui/ui_input.h"
 #include "core/scene_manager.h"
 #include "render/render_engine.h"
 #include "render/image_output.h"
@@ -31,8 +31,18 @@ void UIManager::initialize() {
         ui_input_->set_render_engine(render_engine_);
     }
     
-    std::cout << "UIManager initialized with camera controls" << std::endl;
+    // Connect UI manager to input for primitive management (after initialization)
+    // Note: We'll set this later to avoid shared_from_this() issues during construction
+    
+    std::cout << "UIManager initialized with camera controls and primitive management" << std::endl;
     initialized_ = true;
+}
+
+void UIManager::setup_primitive_management() {
+    if (ui_input_) {
+        ui_input_->set_ui_manager(shared_from_this());
+        std::cout << "Primitive management connected to UI input" << std::endl;
+    }
 }
 
 void UIManager::update() {
@@ -53,6 +63,7 @@ void UIManager::render() {
     render_stop_button();
     render_save_button();
     render_progressive_controls();
+    render_primitive_controls();
     render_progress_display();
 }
 
@@ -411,4 +422,199 @@ std::string UIManager::get_default_filename() const {
         << "-" << std::setw(2) << local_time.tm_sec;
     
     return oss.str();
+}
+
+// Primitive management methods
+void UIManager::render_primitive_controls() {
+    static bool show_primitive_menu = false;
+    
+    // Simple console-based controls for primitive management
+    // In a real application, this would be replaced with GUI controls
+}
+
+void UIManager::trigger_add_primitive_menu() {
+    show_add_primitive_menu();
+}
+
+void UIManager::show_primitive_list() {
+    if (!scene_manager_) {
+        std::cout << "No scene manager available" << std::endl;
+        return;
+    }
+    
+    std::cout << "\n=== Current Scene Objects ===" << std::endl;
+    
+    auto objects = scene_manager_->get_objects();
+    if (objects.empty()) {
+        std::cout << "No objects in scene" << std::endl;
+    } else {
+        std::cout << "Scene contains " << objects.size() << " objects:" << std::endl;
+        for (size_t i = 0; i < objects.size(); ++i) {
+            auto obj = objects[i];
+            Vector3 pos = obj->position();
+            Color col = obj->color();
+            std::cout << "  " << i+1 << ". Object at (" 
+                      << pos.x << ", " << pos.y << ", " << pos.z 
+                      << ") Color(" << col.r << ", " << col.g << ", " << col.b << ")" << std::endl;
+        }
+    }
+    std::cout << "=============================" << std::endl;
+}
+
+void UIManager::trigger_remove_primitive_menu() {
+    show_remove_primitive_menu();
+}
+
+void UIManager::show_add_primitive_menu() {
+    if (!scene_manager_) {
+        std::cout << "No scene manager available" << std::endl;
+        return;
+    }
+    
+    std::cout << "\n=== Add Primitive ===" << std::endl;
+    std::cout << "1. Sphere" << std::endl;
+    std::cout << "2. Cube" << std::endl;
+    std::cout << "3. Torus" << std::endl;
+    std::cout << "4. Pyramid" << std::endl;
+    std::cout << "0. Cancel" << std::endl;
+    std::cout << "Enter choice (0-4): ";
+    
+    std::string choice;
+    std::getline(std::cin, choice);
+    
+    if (choice.empty() || choice == "0") {
+        std::cout << "Add primitive cancelled" << std::endl;
+        return;
+    }
+    
+    try {
+        int type_choice = std::stoi(choice);
+        if (type_choice >= 1 && type_choice <= 4) {
+            add_primitive_by_type(type_choice);
+        } else {
+            std::cout << "Invalid choice. Please enter 1-4." << std::endl;
+        }
+    } catch (const std::exception&) {
+        std::cout << "Invalid input. Please enter a number." << std::endl;
+    }
+    
+    std::cout << "====================" << std::endl;
+}
+
+void UIManager::show_remove_primitive_menu() {
+    if (!scene_manager_) {
+        std::cout << "No scene manager available" << std::endl;
+        return;
+    }
+    
+    std::cout << "\n=== Remove Primitive ===" << std::endl;
+    
+    // First show the current objects
+    show_primitive_list();
+    
+    auto objects = scene_manager_->get_objects();
+    if (objects.empty()) {
+        std::cout << "No objects to remove" << std::endl;
+        return;
+    }
+    
+    std::cout << "\nEnter object number to remove (1-" << objects.size() << "), 0 to cancel: ";
+    
+    std::string choice;
+    std::getline(std::cin, choice);
+    
+    if (choice.empty() || choice == "0") {
+        std::cout << "Remove primitive cancelled" << std::endl;
+        return;
+    }
+    
+    try {
+        int obj_index = std::stoi(choice) - 1; // Convert to 0-based index
+        if (obj_index >= 0 && obj_index < static_cast<int>(objects.size())) {
+            auto obj_to_remove = objects[obj_index];
+            scene_manager_->remove_object(obj_to_remove);
+            std::cout << "Object " << (obj_index + 1) << " removed successfully!" << std::endl;
+        } else {
+            std::cout << "Invalid object number. Please enter 1-" << objects.size() << std::endl;
+        }
+    } catch (const std::exception&) {
+        std::cout << "Invalid input. Please enter a number." << std::endl;
+    }
+    
+    std::cout << "=======================" << std::endl;
+}
+
+void UIManager::add_primitive_by_type(int type_choice) {
+    if (!scene_manager_) {
+        return;
+    }
+    
+    // Get position input
+    std::cout << "Enter position (x y z, default: 0 0 -1): ";
+    std::string pos_input;
+    std::getline(std::cin, pos_input);
+    
+    Vector3 position(0, 0, -1); // default position
+    if (!pos_input.empty()) {
+        std::istringstream iss(pos_input);
+        float x, y, z;
+        if (iss >> x >> y >> z) {
+            position = Vector3(x, y, z);
+        }
+    }
+    
+    // Get color input
+    std::cout << "Enter color (r g b, range 0-1, default: 0.7 0.3 0.3): ";
+    std::string color_input;
+    std::getline(std::cin, color_input);
+    
+    Color color(0.7f, 0.3f, 0.3f); // default color
+    if (!color_input.empty()) {
+        std::istringstream iss(color_input);
+        float r, g, b;
+        if (iss >> r >> g >> b) {
+            color = Color(
+                std::clamp(r, 0.0f, 1.0f),
+                std::clamp(g, 0.0f, 1.0f),
+                std::clamp(b, 0.0f, 1.0f)
+            );
+        }
+    }
+    
+    Material material(color, 0.5f, 0.0f, 0.0f); // default material
+    
+    PrimitiveType prim_type;
+    switch (type_choice) {
+        case 1: prim_type = static_cast<PrimitiveType>(1); break; // SPHERE
+        case 2: prim_type = static_cast<PrimitiveType>(2); break; // CUBE  
+        case 3: prim_type = static_cast<PrimitiveType>(3); break; // TORUS
+        case 4: prim_type = static_cast<PrimitiveType>(4); break; // PYRAMID
+        default:
+            std::cout << "Invalid primitive type" << std::endl;
+            return;
+    }
+    
+    PrimitiveID id = scene_manager_->addPrimitive(prim_type, position, color, material);
+    if (id != 0) { // INVALID_PRIMITIVE_ID is 0
+        std::cout << "Added " << get_primitive_type_name(type_choice) 
+                  << " with ID " << id << " at position (" 
+                  << position.x << ", " << position.y << ", " << position.z << ")" << std::endl;
+    } else {
+        std::cout << "Failed to add " << get_primitive_type_name(type_choice) << std::endl;
+    }
+}
+
+void UIManager::remove_primitive_by_id() {
+    // This method would be used for ID-based removal
+    // Currently using index-based removal in show_remove_primitive_menu
+}
+
+std::string UIManager::get_primitive_type_name(int type) const {
+    switch (type) {
+        case 1: return "Sphere";
+        case 2: return "Cube";  
+        case 3: return "Torus";
+        case 4: return "Pyramid";
+        default: return "Unknown";
+    }
 }

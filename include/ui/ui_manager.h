@@ -10,6 +10,7 @@ class UIInput;
 class SceneManager;
 class RenderEngine;
 class ImageOutput;
+enum class PrimitiveType : uint32_t;
 enum class RenderState;
 enum class ImageFormat;
 struct SaveOptions;
@@ -27,7 +28,7 @@ struct ProgressData {
     std::chrono::steady_clock::time_point last_update_time;
 };
 
-class UIManager {
+class UIManager : public std::enable_shared_from_this<UIManager> {
 public:
     UIManager();
     ~UIManager();
@@ -54,8 +55,16 @@ public:
     void trigger_save_dialog();
     bool is_save_enabled() const;
     
+    // Primitive management functionality
+    void trigger_add_primitive_menu();
+    void show_primitive_list();
+    void trigger_remove_primitive_menu();
+    
     // Get UI components for configuration
     std::shared_ptr<UIInput> get_ui_input() { return ui_input_; }
+    
+    // Setup primitive management (call after manager is created as shared_ptr)
+    void setup_primitive_management();
     
 private:
     void render_start_button();
@@ -64,9 +73,17 @@ private:
     void render_status_display();
     void render_progress_display();
     void render_progressive_controls();
+    void render_primitive_controls();
     std::string get_render_state_text(RenderState state) const;
     void on_render_state_changed(RenderState state);
     std::string format_time(float seconds) const;
+    
+    // Primitive management helpers
+    void show_add_primitive_menu();
+    void show_remove_primitive_menu();
+    void add_primitive_by_type(int type_choice);
+    void remove_primitive_by_id();
+    std::string get_primitive_type_name(int type) const;
     
     // Save functionality
     void show_save_dialog();

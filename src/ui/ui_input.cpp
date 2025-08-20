@@ -1,4 +1,5 @@
-#include "ui_input.h"
+#include "ui/ui_input.h"
+#include "ui/ui_manager.h"
 #include "core/scene_manager.h"
 #include "render/render_engine.h"
 #include "render/path_tracer.h"
@@ -7,6 +8,7 @@
 #include <sstream>
 #include <cmath>
 #include <chrono>
+#include <random>
 
 #ifdef USE_SDL
 #include <SDL.h>
@@ -389,6 +391,92 @@ void UIInput::handle_realtime_camera_input(int keycode) {
                 std::cout << "Save functionality not available" << std::endl;
             }
             break;
+        case SDLK_1:
+            std::cout << "1 key pressed - Add Sphere!" << std::endl;
+            if (scene_manager_) {
+                PrimitiveID id = scene_manager_->addPrimitive(PrimitiveType::SPHERE, Vector3(0, 0, -2), Color::red(), generate_random_material(Color::red()));
+                std::cout << "Added Sphere with ID " << id << std::endl;
+                // Trigger immediate render to show the change
+                if (render_engine_ && !render_engine_->is_progressive_gpu_active()) {
+                    render_engine_->render();
+                    render_engine_->display_image();
+                }
+            } else {
+                std::cout << "No scene manager available!" << std::endl;
+            }
+            break;
+        case SDLK_2:
+            std::cout << "2 key pressed - Add Cube!" << std::endl;
+            if (scene_manager_) {
+                PrimitiveID id = scene_manager_->addPrimitive(PrimitiveType::CUBE, Vector3(1, 0, -2), Color::green(), generate_random_material(Color::green()));
+                std::cout << "Added Cube with ID " << id << std::endl;
+                // Trigger immediate render to show the change
+                if (render_engine_ && !render_engine_->is_progressive_gpu_active()) {
+                    render_engine_->render();
+                    render_engine_->display_image();
+                }
+            } else {
+                std::cout << "No scene manager available!" << std::endl;
+            }
+            break;
+        case SDLK_3:
+            std::cout << "3 key pressed - Add Torus!" << std::endl;
+            if (scene_manager_) {
+                PrimitiveID id = scene_manager_->addPrimitive(PrimitiveType::TORUS, Vector3(-1, 0, -2), Color::blue(), generate_random_material(Color::blue()));
+                std::cout << "Added Torus with ID " << id << std::endl;
+                // Trigger immediate render to show the change
+                if (render_engine_ && !render_engine_->is_progressive_gpu_active()) {
+                    render_engine_->render();
+                    render_engine_->display_image();
+                }
+            } else {
+                std::cout << "No scene manager available!" << std::endl;
+            }
+            break;
+        case SDLK_4:
+            std::cout << "4 key pressed - Add Pyramid!" << std::endl;
+            if (scene_manager_) {
+                PrimitiveID id = scene_manager_->addPrimitive(PrimitiveType::PYRAMID, Vector3(0, 1, -2), Color::white(), generate_random_material(Color::white()));
+                std::cout << "Added Pyramid with ID " << id << std::endl;
+                // Trigger immediate render to show the change
+                if (render_engine_ && !render_engine_->is_progressive_gpu_active()) {
+                    render_engine_->render();
+                    render_engine_->display_image();
+                }
+            } else {
+                std::cout << "No scene manager available!" << std::endl;
+            }
+            break;
+        case SDLK_l:
+            std::cout << "L key pressed - List Primitives!" << std::endl;
+            if (ui_manager_) {
+                ui_manager_->show_primitive_list();
+            } else {
+                std::cout << "No UI manager available!" << std::endl;
+            }
+            break;
+        case SDLK_DELETE:
+        case SDLK_BACKSPACE:
+            std::cout << "Delete key pressed - Remove Last Primitive!" << std::endl;
+            if (scene_manager_) {
+                auto objects = scene_manager_->get_objects();
+                if (!objects.empty()) {
+                    // Find the primitive ID for the last object and remove it
+                    auto last_object = objects.back();
+                    scene_manager_->remove_object(last_object);
+                    std::cout << "Removed last primitive from scene" << std::endl;
+                    // Trigger immediate render to show the change
+                    if (render_engine_ && !render_engine_->is_progressive_gpu_active()) {
+                        render_engine_->render();
+                        render_engine_->display_image();
+                    }
+                } else {
+                    std::cout << "No primitives to remove!" << std::endl;
+                }
+            } else {
+                std::cout << "No scene manager available!" << std::endl;
+            }
+            break;
     }
     
     // Track camera key presses for movement detection
@@ -500,6 +588,49 @@ void UIInput::get_camera_vectors(Vector3& forward, Vector3& right, Vector3& up) 
     up = right.cross(forward).normalized();
 }
 
+Material UIInput::generate_random_material(const Color& base_color) const {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    static std::uniform_real_distribution<float> roughness_dist(0.0f, 1.0f);
+    static std::uniform_real_distribution<float> metallic_dist(0.0f, 1.0f);
+    static std::uniform_int_distribution<int> material_type(0, 4);
+    
+    int type = material_type(gen);
+    
+    switch (type) {
+        case 0: { // Shiny metal (low roughness, high metallic)
+            float rough = roughness_dist(gen) * 0.2f;
+            float metal = 0.8f + metallic_dist(gen) * 0.2f;
+            std::cout << "  → Generated: Shiny Metal surface (roughness=" << rough << ", metallic=" << metal << ")" << std::endl;
+            return Material(base_color, rough, metal, 0.0f);
+        }
+        case 1: { // Rough metal (high roughness, high metallic)  
+            float rough = 0.6f + roughness_dist(gen) * 0.4f;
+            float metal = 0.7f + metallic_dist(gen) * 0.3f;
+            std::cout << "  → Generated: Rough Metal surface (roughness=" << rough << ", metallic=" << metal << ")" << std::endl;
+            return Material(base_color, rough, metal, 0.0f);
+        }
+        case 2: { // Glossy plastic (low roughness, low metallic)
+            float rough = roughness_dist(gen) * 0.3f;
+            float metal = metallic_dist(gen) * 0.1f;
+            std::cout << "  → Generated: Glossy Plastic surface (roughness=" << rough << ", metallic=" << metal << ")" << std::endl;
+            return Material(base_color, rough, metal, 0.0f);
+        }
+        case 3: { // Matte surface (high roughness, low metallic)
+            float rough = 0.7f + roughness_dist(gen) * 0.3f;
+            float metal = metallic_dist(gen) * 0.1f;
+            std::cout << "  → Generated: Matte Diffuse surface (roughness=" << rough << ", metallic=" << metal << ")" << std::endl;
+            return Material(base_color, rough, metal, 0.0f);
+        }
+        default: { // Mirror-like (very low roughness, high metallic)
+            float rough = roughness_dist(gen) * 0.1f;
+            float metal = 0.9f + metallic_dist(gen) * 0.1f;
+            std::cout << "  → Generated: Mirror-like surface (roughness=" << rough << ", metallic=" << metal << ")" << std::endl;
+            return Material(base_color, rough, metal, 0.0f);
+        }
+    }
+}
+
 void UIInput::print_camera_controls() const {
     std::cout << "\n=== REAL-TIME CAMERA CONTROLS ===" << std::endl;
     std::cout << "W/S - Move Forward/Backward" << std::endl;
@@ -510,6 +641,13 @@ void UIInput::print_camera_controls() const {
     std::cout << "O   - Reset to origin (0 0 3)" << std::endl;
     std::cout << "H   - Show this help" << std::endl;
     std::cout << "Q/ESC - Quit application" << std::endl;
+    std::cout << "\n=== PRIMITIVE MANAGEMENT ===" << std::endl;
+    std::cout << "1   - Add Red Sphere (random material)" << std::endl;
+    std::cout << "2   - Add Green Cube (random material)" << std::endl;
+    std::cout << "3   - Add Blue Torus (random material)" << std::endl;
+    std::cout << "4   - Add White Pyramid (random material)" << std::endl;
+    std::cout << "L   - List all primitives in scene" << std::endl;
+    std::cout << "DEL/BACKSPACE - Remove last primitive" << std::endl;
     std::cout << "\n=== RENDER CONTROLS ===" << std::endl;
     std::cout << "G   - Quick render (4 samples GPU, 1 sample CPU)" << std::endl;
     std::cout << "U   - GPU rendering in main thread (test)" << std::endl;
@@ -517,7 +655,7 @@ void UIInput::print_camera_controls() const {
     std::cout << "T   - Stop/cancel rendering" << std::endl;
     std::cout << "X   - Cancel progressive rendering" << std::endl;
     std::cout << "V   - Save rendered image (after completion)" << std::endl;
-    std::cout << "\nCamera moves independently - use G for quick render, M for quality!" << std::endl;
+    std::cout << "\nAdd primitives with 1-4, then use G for quick render, M for quality!" << std::endl;
     std::cout << "==================================" << std::endl;
 }
 

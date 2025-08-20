@@ -3,6 +3,8 @@
 #include "core/common.h"
 #include <memory>
 #include <functional>
+#include <set>
+#include <chrono>
 
 // Forward declarations
 class SceneManager;
@@ -24,6 +26,9 @@ public:
     // Set callback for save functionality
     void set_save_callback(std::function<void()> callback) { save_callback_ = callback; }
     
+    // Set UI manager for primitive management
+    void set_ui_manager(std::shared_ptr<UIManager> ui_manager) { ui_manager_ = ui_manager; }
+    
     // Camera position controls
     Vector3 get_camera_position() const;
     void set_camera_position(const Vector3& position);
@@ -31,11 +36,21 @@ public:
     
 private:
     void handle_camera_input();
+    void handle_realtime_camera_input(int keycode);
+    void handle_camera_key_release(int keycode);
+    void handle_mouse_look(int delta_x, int delta_y);
+    void handle_direct_mouse_input(); // Direct polling bypass
+    void update_camera_target();
+    void get_camera_vectors(Vector3& forward, Vector3& right, Vector3& up) const;
     void print_camera_controls() const;
+    
+    // Helper for random material generation
+    Material generate_random_material(const Color& base_color) const;
     
     bool quit_requested_;
     std::shared_ptr<SceneManager> scene_manager_;
     std::shared_ptr<RenderEngine> render_engine_;
+    std::shared_ptr<UIManager> ui_manager_;
     std::function<void()> save_callback_;
     
     // Camera movement settings
@@ -48,4 +63,9 @@ private:
     int last_mouse_y_;
     float camera_yaw_;   // Horizontal rotation
     float camera_pitch_; // Vertical rotation
+    bool use_raw_mouse_; // For raw mouse input handling
+    std::chrono::steady_clock::time_point mouse_release_time_; // Track when mouse was released
+    
+    // Camera movement state tracking
+    std::set<int> pressed_camera_keys_;
 };

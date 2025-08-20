@@ -1,4 +1,4 @@
-#include "render_engine.h"
+#include "render/render_engine.h"
 #include "render/path_tracer.h"
 #include "core/scene_manager.h"
 #include "core/camera.h"
@@ -16,7 +16,8 @@
 RenderEngine::RenderEngine() 
     : initialized_(false), render_width_(1280), render_height_(720),
       render_state_(RenderState::IDLE), stop_requested_(false), progressive_mode_(false), manual_progressive_mode_(false),
-      render_mode_(RenderMode::AUTO), gpu_initialized_(false), camera_moving_(false) {
+      render_mode_(RenderMode::AUTO), gpu_initialized_(false), auto_gpu_sync_enabled_(true), last_scene_object_count_(0),
+      camera_moving_(false) {
     initialize();
 }
 
@@ -74,6 +75,11 @@ void RenderEngine::render() {
     }
     
     std::cout << "Starting render (" << render_width_ << "x" << render_height_ << ")" << std::endl;
+    
+    // Sync scene changes to GPU if auto-sync is enabled
+    if (auto_gpu_sync_enabled_) {
+        sync_scene_changes_to_gpu();
+    }
     
     // Execute path tracing with GPU/CPU hybrid mode
 #ifdef USE_GPU
@@ -777,6 +783,52 @@ RenderMetrics RenderEngine::get_render_metrics() const {
     metrics.cpu_utilization = render_state_ == RenderState::RENDERING ? 80.0f : 10.0f;
     
     return metrics;
+}
+
+// Dynamic scene synchronization methods
+void RenderEngine::sync_scene_changes_to_gpu() {
+#ifdef USE_GPU
+    if (!gpu_initialized_ || !scene_manager_ || !gpu_memory_) {
+        return;
+    }
+    
+    auto current_time = std::chrono::steady_clock::now();
+    auto objects = scene_manager_->get_objects();
+    size_t current_object_count = objects.size();
+    
+    // Check if scene has changed
+    bool scene_changed = (current_object_count != last_scene_object_count_);
+    
+    if (scene_changed || !scene_manager_->isGPUSynced()) {
+        std::cout << "Scene changes detected, syncing to GPU..." << std::endl;
+        
+        // Sync legacy scene data
+        scene_manager_->syncSceneToGPU();
+        
+        // Sync new primitive data
+        scene_manager_->syncPrimitivesToGPU();
+        
+        last_scene_sync_ = current_time;
+        last_scene_object_count_ = current_object_count;
+        
+        std::cout << "Scene synchronized to GPU (" << current_object_count << " objects)" << std::endl;
+        
+        // Note: Path tracer will automatically detect scene changes during next render
+    }
+#endif
+}
+
+void RenderEngine::set_auto_gpu_sync(bool enabled) {
+    auto_gpu_sync_enabled_ = enabled;
+    if (enabled) {
+        std::cout << "Auto GPU sync enabled" << std::endl;
+    } else {
+        std::cout << "Auto GPU sync disabled" << std::endl;
+    }
+}
+
+bool RenderEngine::is_auto_gpu_sync_enabled() const {
+    return auto_gpu_sync_enabled_;
 }
 
 bool RenderEngine::render_gpu_main_thread() {

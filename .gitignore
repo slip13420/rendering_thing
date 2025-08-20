@@ -93,11 +93,6 @@ Thumbs.db
 *.logs
 logs/
 
-# Runtime and test files
-core
-vgcore.*
-*.stackdump
-
 # Rendered output files (unless specifically needed)
 *.ppm
 *.png
